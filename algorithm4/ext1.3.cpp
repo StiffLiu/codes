@@ -5,10 +5,6 @@
 #include <algorithm>
 #include <stack>
 #include <queue>
-
-/*
- * A test of git hub
- */
 using namespace std;
 /*
  * Illustartion of exercise 1.3.49 in book Algorithms Edition 4
