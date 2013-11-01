@@ -74,6 +74,9 @@ int couponCollectorProlem(int argc, char *argv[]){
 		cout << val1 << "\t\t" << val2 << "\t\t" << (val2 / val1) << endl;
 	}
 }
+
+/**
+ */
 void generateBitonicArray(int max, int min, int n, vector<int>& result){
 	int mid = rand() % n;
 	int diff = max - min;

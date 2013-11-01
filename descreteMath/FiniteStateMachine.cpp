@@ -11,6 +11,10 @@
 #include <stack>
 using namespace std;
 #define ARSIZE(ar) ((sizeof (ar)) / (sizeof (*ar)))
+
+/*
+ * generate a random string with a given length
+ */
 string randString(int num) {
 	string tmp;
 	for (int i = 0; i < num; ++i) {
@@ -22,6 +26,20 @@ string randString(int num) {
 	}
 	return tmp;
 }
+
+/*
+ * Compare the performance of hash map(unordered_map) and
+ * sorted map(map).
+ * After running serveral test, I found that the performance of hash map
+ * is several times better.
+ * But in cases when we want the elements to be ordered, we may prefer a sorted map.
+ *
+ * Note that hash map become part of standard c++ only after c++11.
+ * You may need to set some compiler flags, so that this program could be be compiled.
+ * You can add the following compiler options under g++:
+ * 		-std=gnu++0x
+ *
+ */
 int compareMaps(int argc, char *argv[]) {
 	const int numOfIntegers = 10000;
 	typedef int Item;
@@ -51,6 +69,11 @@ int compareMaps(int argc, char *argv[]) {
 	return 0;
 }
 
+/*
+ * I was considering to have some special hash key generator for
+ * an integer. But I didn't came out some ideas, except using the
+ * value of an integer directly.
+ */
 struct HashKeyCalculator {
 	int operator()(const int& val) const {
 		return val;
@@ -188,20 +211,39 @@ public:
 		return true;
 	}
 };
+
+/*
+ * This class represent a finite state automaton.
+ */
 template<class State, class Input, class HashKeyCalculator>
 class FAutomaton {
 public:
 	typedef std::unordered_set<State, HashKeyCalculator> StateSet;
+	/*
+	 * Set the start state
+	 */
 	void setAsStart(const State& state) {
 		startState = state;
 	}
+
+	/*
+	 * Set the final state
+	 */
 	void addFinal(const State& state) {
 		finalStates.insert(state);
 	}
+
+	/*
+	 * Get the final states
+	 */
 	const StateSet& getFinals() const {
 		return finalStates;
 	}
 protected:
+
+	/*
+	 * a hash key generator for a pair
+	 */
 	struct HashKey {
 		HashKeyCalculator calculator;
 		/*HashKey(const HashKeyCalculator& calculator) :
@@ -214,6 +256,9 @@ protected:
 	StateSet finalStates;
 	State startState;
 
+	/*
+	 * output the finite state machine to stream.
+	 */
 	friend ostream& operator<<(ostream& os, const FAutomaton& fa) {
 		os << "start state : " << fa.startState << endl;
 		typename StateSet::const_iterator start =
@@ -232,6 +277,10 @@ protected:
 		return os;
 	}
 };
+
+/*
+ * A deterministic finite state automaton.
+ */
 template<class State, class Input, class HashKeyCalculator>
 class DFAutomaton: public FAutomaton<State, Input, HashKeyCalculator> {
 protected:

@@ -8,6 +8,26 @@
 #include <cassert>
 using namespace std;
 
+/**
+ * an n-ary minimum heap
+ * An n-ary minimum heap is a data structure with the following properties:
+ *  1. It's a complete n-ary tree, except that the last parent(the node at right
+ *  	most of the second to last level and  contains at least one child) may not
+ *  	contain n children.
+ *  2. The value of parent is not larger than any of those of its children.
+ *
+ */
+/*
+ * This implementation uses "array-like" data structures as it's internal
+ * representation.
+ * The indices of the children of the node with index "j" are :
+ * 		n * j + c, where 1 <= c <= d
+ *
+ * The index of the parent of the node with index "j" is :
+ * 		(j - 1) / n, if j > 0
+ *
+ * The node with index "0" is the root node.
+ */
 template<class T, class Seq = std::vector<T>, class Less = std::less<T> >
 class NaryHeap {
 protected:
@@ -15,6 +35,12 @@ protected:
 	size_t s;
 	Less comparator;
 	unsigned int d;
+	/*
+	 *  Every node, except possibly the value of the parent of the node with index "index"
+	 *  maybe greater than that of this node.
+	 *  We need to  swap values if necessary, to revalidates the two properties mentioned above.
+	 *  We do this iteratively until we reach the root node.
+	 */
 	void promote(size_t index) {
 		if (index <= 0)
 			return;
@@ -39,6 +65,10 @@ public:
 		s = 0;
 		makeHeap(begin, end);
 	}
+
+	/*
+	 * construct a minimum heap from a range
+	 */
 	template<class ForwardIterator>
 	void makeHeap(ForwardIterator begin, ForwardIterator end) {
 		data.clear();
@@ -71,6 +101,9 @@ public:
 			index = smallest;
 		}
 	}
+	/*
+	 * get and remove the minimum value from this heap
+	 */
 	bool extract(T& ret) {
 		if (empty())
 			return false;
@@ -81,15 +114,31 @@ public:
 		heapify(0);
 		return true;
 	}
+
+	/*
+	 * get the root of this heap, which is the minimum.
+	 */
 	const T& top() const {
 		return data[0];
 	}
+
+	/*
+	 * Whether the heap is empty or not
+	 */
 	bool empty() const {
 		return s == 0;
 	}
+
+	/*
+	 * get the node with a given index
+	 */
 	const T& get(size_t index) const {
 		return data[index];
 	}
+
+	/*
+	 * set the value of the node at a given index
+	 */
 	void set(size_t index, const T& item) {
 		if (comparator(item, data[index])) {
 			data[index] = item;
@@ -101,11 +150,19 @@ public:
 			data[index] = item;
 		}
 	}
+
+	/*
+	 * add one item into the heap
+	 */
 	void add(const T& item) {
 		data.push_back(item);
 		++s;
 		promote(s - 1);
 	}
+
+	/*
+	 * remove one item from the heap
+	 */
 	void remove(size_t index) {
 		if (index >= s)
 			return;
@@ -118,9 +175,13 @@ public:
 	size_t size() const {
 		return s;
 	}
+
+	/*
+	 * heap sort
+	 */
 	template<class U>
-	void sort(U& u){
-		while(!empty()){
+	void sort(U& u) {
+		while (!empty()) {
 			DataType val;
 			extract(val);
 			u.push_back(val);
@@ -157,30 +218,35 @@ public:
 	}
 };
 template<class T>
-struct Range{
+struct Range {
 	T start;
 	T end;
-	bool operator<(const Range& another) const{
-		if(start == end)
+	bool operator<(const Range& another) const {
+		if (start == end)
 			return another.start != another.end;
-		if(another.start == another.end)
+		if (another.start == another.end)
 			return false;
 		return *start < *another.start;
 	}
 };
-template<class T,class OutputIterator>
-void kWayMerge(Range<T> *ranges, int k, OutputIterator output){
+
+/*
+ * merge k sorted ranges.
+ * The cost of this algorithm is O(k + n*lg(k))
+ */
+template<class T, class OutputIterator>
+void kWayMerge(Range<T> *ranges, int k, OutputIterator output) {
 	typedef BinaryHeap<Range<T> > Heap;
 	Heap heap(ranges, ranges + k);
-	while(!heap.empty()){
+	while (!heap.empty()) {
 		typename Heap::DataType val;
 		heap.extract(val);
-		if(val.start != val.end){
+		if (val.start != val.end) {
 			*output = *val.start;
 			++output;
-			++ val.start;
+			++val.start;
 		}
-		if(val.start != val.end)
+		if (val.start != val.end)
 			heap.add(val);
 	}
 }
@@ -199,26 +265,29 @@ void testHeap(const vector<int>& numbers, const vector<int>& toAdd,
 	cout << "after make heap: ";
 	heap.makeHeap(numbers.begin(), numbers.end());
 	heap.sort(heapSorted);
-	copy(heapSorted.begin(), heapSorted.end(), ostream_iterator<int>(cout, " "));
+	copy(heapSorted.begin(), heapSorted.end(),
+			ostream_iterator<int>(cout, " "));
 	cout << endl;
 
 	assert(sorted == heapSorted);
 	cout << "after new elements added: ";
 	heap.makeHeap(numbers.begin(), numbers.end());
-	for(size_t i = 0;i < toAdd.size();++ i)
+	for (size_t i = 0; i < toAdd.size(); ++i)
 		heap.add(toAdd[i]);
 	heapSorted.clear();
 	heap.sort(heapSorted);
-	copy(heapSorted.begin(), heapSorted.end(), ostream_iterator<int>(cout, " "));
+	copy(heapSorted.begin(), heapSorted.end(),
+			ostream_iterator<int>(cout, " "));
 	cout << endl;
 
 	cout << "after elements removed: ";
 	heap.makeHeap(numbers.begin(), numbers.end());
-	for(size_t i = 0;i < toAdd.size();++ i)
-			heap.remove(toRemove[i]);
+	for (size_t i = 0; i < toAdd.size(); ++i)
+		heap.remove(toRemove[i]);
 	heapSorted.clear();
 	heap.sort(heapSorted);
-	copy(heapSorted.begin(), heapSorted.end(), ostream_iterator<int>(cout, " "));
+	copy(heapSorted.begin(), heapSorted.end(),
+			ostream_iterator<int>(cout, " "));
 	cout << endl;
 }
 int test21(int argc, char *argv[]) {
@@ -242,7 +311,7 @@ int test21(int argc, char *argv[]) {
 	testHeap(numbers, toAdd, toRemove, naryHeap);
 	return 0;
 }
-int test22(int argc, char *argv[]){
+int test22(int argc, char *argv[]) {
 	const int k = 10;
 	const int least = 10;
 	vector<vector<int> > numbers;
@@ -250,10 +319,10 @@ int test22(int argc, char *argv[]){
 	int totalNum = 0;
 	numbers.resize(k);
 	ranges.resize(k);
-	for(int i = 0;i < k;++ i){
+	for (int i = 0; i < k; ++i) {
 		vector<int>& one = numbers[i];
 		int num = least + rand() % 30;
-		for(int j = 0;j < num;++ j)
+		for (int j = 0; j < num; ++j)
 			one.push_back(rand() % 1000);
 		sort(one.begin(), one.end());
 		totalNum += num;
