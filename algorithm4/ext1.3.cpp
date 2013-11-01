@@ -7,6 +7,7 @@
 #include <queue>
 using namespace std;
 /*
+ *
  * Illustartion of exercise 1.3.49 in book Algorithms Edition 4
  * This is not a solution of the problem, just a research.
  * The problem is not solved by me now.
