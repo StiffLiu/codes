@@ -9,7 +9,7 @@
 #include <sstream>
 #include <list>
 #include <iostream>
-namespace sli{
+namespace tmlg{
 	typedef unsigned char Byte;
 	
 	/****************************************/

@@ -1,4 +1,4 @@
-// ParasolidScript.cpp : Defines the entry point for the console application.
+// HeaderParser.cpp : Defines the entry point for the console application.
 //
 
 #include "stdafx.h"
@@ -8,7 +8,7 @@
 #include <sstream>
 
 using namespace std;
-using namespace sli;
+using namespace tmlg;
 #define ARRAYSIZE(ar) ((sizeof (ar))/(sizeof (*ar)))
 /*the order of these string literals should be changed with care,
 so that they are consistent with the enum defitions in the class Keyword.
@@ -904,7 +904,7 @@ int HeaderParser::parseMacro(){
 		return getToken();
 }
 void HeaderParser::includeFile(const char *fileName){
-	static string baseDir = "D:\\DevBase\\Extracted\\Parasolid Jumpstart Kit\\example_applications\\C++\\Source\\Include\\";
+	static string baseDir = "D:\\";
 
 	map<string, string>::iterator pos = fileContents.find(fileName);
 	const char *start = NULL;
