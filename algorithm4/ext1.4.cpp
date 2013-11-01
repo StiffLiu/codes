@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <iterator>
 #include <fstream>
-//This time git hub is ok.
+
 using namespace std;
 /*
  * If an integer is randomly choosen from the range 1~N,
@@ -224,40 +224,181 @@ unsigned int localMinimum(T* val, unsigned int n){
  * which are DISTINCT, with O(m + n) comparisions.
  * The cost of the algorithm is O(m + n) follows from the recurrence relation:
  *	T(m, n) = T(m / 2, n / 2) + O(m + n)
+ * Upper bound of this algorithm in worst case situation in terms of the number of comparisions
+ * made is about 16 * (m + n).
+ * But the average case is very good
  */
 template<class T>
-inline bool isLocalMinimum(T *array2D, unsigned int m, 
+inline bool isLocalMinimum(const T *array2D, unsigned int m, 
 	unsigned int n, unsigned int i, unsigned int j, unsigned int& comparisions){
 	unsigned int index = i * n + j;
-	if(i > 0 && array2D[index] > array2D[index - n]){
-		comparisions += 2;
-		return false;
+	comparisions += 1;
+	if(i > 0){
+		comparisions += 1;
+		if(array2D[index] > array2D[index - n]){
+			return false;
+		}
 	}
-	if(i < m - 1 && array2D[index] > array2D[index + n]){
-		comparisions += 2;		
-		return false;
+
+	comparisions += 1;
+	if(i < m - 1){
+		comparisions += 1;
+		if(array2D[index] > array2D[index + n]){
+			return false;
+		}
 	}
-	if(j > 0 && array2D[index] > array2D[index - 1]){
-		comparisions += 2;
-		return false;
+
+	comparisions += 1;
+	if(j > 0){
+		comparisions += 1;
+		if(array2D[index] > array2D[index - 1]){
+			return false;
+		}
 	}
-	if(j < n - 1 && array2D[index] > array2D[index + 1]){
-		comparisions += 2;
-		return false;
+
+	comparisions += 1;
+	if(j < n - 1){
+		comparisions += 1;
+		if(array2D[index] > array2D[index + 1]){
+			return false;
+		}
 	}
+
 	return true;
 }
 template<class T>
-void output(ostream& os, T *vals, unsigned int m, unsigned int n){
-	for(unsigned int i = 0;i < m;++ i){
-		for(unsigned int j = 0;j < n;++ j){
+inline bool isLocalMinimumFast(const T *array2D, 
+	unsigned int n, unsigned int i, unsigned int j, unsigned int& comparisions){
+	unsigned int index = i * n + j;
+	comparisions += 1;
+	if(array2D[index] > array2D[index - n])
+		return false;
+
+	comparisions += 1;
+	if(array2D[index] > array2D[index + n])
+		return false;
+
+	comparisions += 1;
+	if(array2D[index] > array2D[index - 1])
+		return false;
+
+	comparisions += 1;
+	if(array2D[index] > array2D[index + 1])
+		return false;
+
+	return true;
+}
+template<class T>
+void output(ostream& os, const T *vals, unsigned int n, unsigned int startRow, unsigned int endRow,
+	unsigned int startCol, unsigned int endCol){
+	for(unsigned int i = startRow;i <= endRow;++ i){
+		for(unsigned int j = startCol;j <= endCol;++ j){
 			os << vals[i * n + j] << ' ';
 		}
 		os << endl;
 	}
 }
 template<class T>
-pair<unsigned int, unsigned int> localMinimum(T * array2D, unsigned int m, unsigned int n, unsigned int& comparisions){
+void output(ostream& os, const T *vals, unsigned int m, unsigned int n){
+	output(os, vals, n, 0, m - 1, 0, n - 1);
+}
+unsigned int calculateOdd(unsigned int n ,unsigned int total, 
+	unsigned int offset, unsigned int i, unsigned int j){
+	int tmp;
+	switch(i % 4){
+	case 0:
+		if(j > 0)
+			return  (total + i / 4 * 2 * (n - 1) + j - 1);
+		tmp = i / 4 * 2 * (n + 1);
+		break;
+	case 1:
+		tmp = i / 4 * 2 * (n + 1) + 1 + j;
+		break;
+	case 2:
+		if(j < n - 1)
+			return (total + (i / 4 * 2 + 1) * (n - 1) + j);
+		tmp = i / 4 * 2 * (n + 1) + 1 + n;
+		break;
+	case 3:
+		tmp = i / 4 * 2 * (n + 1) + 1 + 2 * n - j;
+		break;
+				
+	}
+	if(tmp >= offset)
+		return tmp - offset;
+	return total - 1 - tmp;	
+}
+unsigned int calculateEven(unsigned int n ,unsigned int total, 
+	unsigned int offset, unsigned int i, unsigned int j){
+	int tmp;
+	switch(i % 4){
+	case 0:
+		tmp = i / 4 * 2 * (n + 1) + j;
+		break;
+	case 1:
+		if(j < n - 1)
+			return  (total + i / 4 * 2 * (n - 1) + j);
+		tmp = i / 4 * 2 * (n + 1) + n;
+		break;
+	case 2:
+		tmp = i / 4 * 2 * (n + 1) + 2 * n - j;
+		break;
+	case 3:
+		if(j > 0)
+			return (total + (i / 4 * 2 + 1) * (n - 1) + j - 1);
+		tmp = i / 4 * 2 * (n + 1) + 1 + 2 * n;
+		break;				
+	}
+	if(tmp >= offset)
+		return tmp - offset;
+	return total - 1 - tmp;	
+}
+void generateSpecialArray(int *output, unsigned int m, unsigned int n, unsigned int min, 
+	unsigned int row, unsigned int col){
+	if(row >= m)
+		row = m - 1;
+	if(col >= n)
+		col = n - 1;
+	unsigned int total = m / 4 * 2 * (n + 1);
+	if(row % 2 != 0){
+		switch(m % 4){
+			case 1:
+				total += 1;break;
+			case 2:
+				total += (n + 1);break;
+			case 3:
+				total += (n + 2);break;
+		}
+		unsigned int offset = calculateOdd(n, total, 0, row, col);
+		cout << "offset " << offset << ", total " << total << ", row " << row << ", col " << col << endl;
+		for(unsigned int i = 0;i < m;++ i){
+			for(unsigned int j = 0;j < n;++ j){
+				output[i * n + j] = min + calculateOdd(n, total, offset, i, j);
+			}
+		}
+	}else{
+		switch(m % 4){
+			case 1:
+				total += n;break;
+			case 2:
+				total += (n + 1);break;
+			case 3:
+				total += (2 * n + 1);break;
+		}
+		unsigned int offset = calculateEven(n, total, 0, row, col);
+		cout << "offset " << offset << ", total " << total << ", row " << row << ", col " << col << endl;
+		for(unsigned int i = 0;i < m;++ i){
+			for(unsigned int j = 0;j < n;++ j){
+				output[i * n + j] = min + calculateEven(n, total, offset, i, j);
+			}
+		}
+	}
+}
+void generateSpecialArray(int *output, unsigned int m, unsigned int n, unsigned int min){
+	generateSpecialArray(output, m, n, min, m - 1, n / 2);
+}
+template<class T>
+pair<unsigned int, unsigned int> buggyLocalMinimum(const T * array2D, unsigned int m, unsigned int n, unsigned int& comparisions){
 	typedef pair<unsigned int, unsigned int> Type;
 	if(m == 0 || n == 0)
 		return Type(-1, -1);
@@ -268,18 +409,37 @@ pair<unsigned int, unsigned int> localMinimum(T * array2D, unsigned int m, unsig
 	unsigned int startRow = 0, endRow = m - 1;
 	unsigned int startCol = 0, endCol = n - 1;
 	while(startRow != endRow && startCol != endCol){
+		//cout << "--------------------"<<endl;
+		//output(cout, array2D, n, startRow, endRow, startCol, endCol);
+		//cout << "--------------------" << endl;
 		unsigned int midRow = (startRow + endRow) / 2;
 		unsigned int midCol = (startCol + endCol) / 2;
 		unsigned int colMin = startCol;
 		unsigned int rowMin = startRow;
-		comparisions += (endCol - startCol);
-		for(unsigned int i = startCol + 1;i <= endCol;++ i)
+
+		if(isLocalMinimum(array2D, m, n, midRow, colMin, comparisions))
+			return Type(midRow, colMin);
+		for(unsigned int i = startCol + 1;i <= endCol;++ i){
+			//This test is necessary, or there would be bugs
+			if(isLocalMinimum(array2D, m, n, midRow, i, comparisions))
+				return Type(midRow, i);
 			if(array2D[midRow * n + i] < array2D[midRow * n + colMin])
 				colMin = i;
-		comparisions += (endRow - startRow);		
-		for(unsigned int i = startRow + 1;i <= endRow;++ i)
+			++comparisions;
+		}
+
+		if(isLocalMinimum(array2D, m, n, rowMin, midCol, comparisions)){
+			assert(isLocalMinimum(array2D, m, n, rowMin, midCol, comparisions));
+			return Type(rowMin, midCol);
+		}
+		for(unsigned int i = startRow + 1;i <= endRow;++ i){
+			//This test is necessary, or there would be bugs
+			if(isLocalMinimum(array2D, m, n, i, midCol, comparisions))
+				return Type(i, midCol);
 			if(array2D[i * n + midCol] < array2D[rowMin * n + midCol])
 				rowMin = i;
+			++comparisions;
+		}
 		comparisions += 2;
 		if(colMin == midCol && rowMin == midRow)
 			return Type(midRow, midCol);
@@ -294,7 +454,11 @@ pair<unsigned int, unsigned int> localMinimum(T * array2D, unsigned int m, unsig
 			//that is we won't access memory out of the 2d array
 			if(array2D[midRow * n + colMin] > array2D[(midRow + 1) * n + colMin]){
 				startRow = midRow + 1;
+			}else /*This is unnecessary*//*if(midRow > 0 && array2D[midRow * n + colMin] > array2D[(midRow - 1) * n + colMin]){
+				endRow = midRow;
 			}else{
+				return Type(midRow, colMin);
+			}*/{
 				endRow = midRow;
 			}
 		}else{
@@ -307,7 +471,11 @@ pair<unsigned int, unsigned int> localMinimum(T * array2D, unsigned int m, unsig
 			//that is we won't access memory out of the 2d array
 			if(array2D[rowMin * n + midCol] > array2D[rowMin * n + midCol + 1]){
 				startCol = midCol + 1;
+			}else /*This is unnecessary*//*if(midCol > 0 && array2D[rowMin * n + midCol] > array2D[rowMin * n + midCol - 1]){
+				endCol = midCol;
 			}else{
+				return Type(rowMin, midCol);
+			}*/{
 				endCol = midCol;
 			}
 		}		
@@ -316,15 +484,17 @@ pair<unsigned int, unsigned int> localMinimum(T * array2D, unsigned int m, unsig
 		for(unsigned int j = startCol;j <= endCol;++ j)
 			if(isLocalMinimum(array2D, m, n, startRow, j, comparisions))
 				return Type(startRow, j);
-		/*ofstream out("test.txt");
-		output(out, array2D, m, n);
-		out << "startRow = " << startRow << ", startCol = " << startCol << ", endCol = " << endCol << endl;*/
+		//ofstream out("test.txt");
+		output(cout, array2D, m, n);
+		cout << "startRow = " << startRow << ", startCol = " << startCol << ", endCol = " << endCol << endl;
 		assert(false);
 	}
 	if(startCol == endCol){
 		for(unsigned int j = startRow;j <= endRow;++ j)
 			if(isLocalMinimum(array2D, m, n, j, startCol, comparisions))
 				return Type(j, startCol);
+		output(cout, array2D, m, n);
+		cout << "startRow = " << startRow << ", startCol = " << startCol << ", endCol = " << endCol << endl;
 		assert(false);
 	}
 	assert(false);
@@ -350,18 +520,39 @@ void testLocalMinimun(int argc, char *argv[]){
 	}
 	//test for local minimum of 2D array
 	{
+		int failArray[] = {
+			39, 38, 37, 36, 35, 34, 33, 32, 31,
+			40, 41, 42, 43, 44, 45, 46, 47, 30,
+			21, 22, 23, 24, 25, 26, 27, 28, 29,
+			20, 48, 49, 50, 51, 52, 53, 54, 55,
+			2, 18, 17, 16, 15, 14, 13, 12, 11,
+			56, 57, 58, 59, 60, 61, 62, 63, 10,
+			4, 3, 19, 1, 5, 6, 7, 8, 9,
+		};
+		unsigned int comparisions = 0;
+		pair<unsigned int, unsigned int> index = buggyLocalMinimum(failArray, 7, 9, comparisions);
+		for(unsigned int i = 0;i < 7;++ i){
+			for(unsigned int j = 0;j < 9;++ j){
+				if(i == index.first && j == index.second)
+					cout << "*** ";
+				else
+					cout << failArray[i * 9 + j] << ' ';
+			}
+			cout << endl;
+		}
 		const unsigned int m = 200;
 		const unsigned int n = 200;
-		int vals[m * n];
+		int *vals = new int[m * n];
 		for(unsigned int i = 0;i < m * n;++ i)
 			vals[i] = i + 100;
-		
-		for(int j = 0;j < 10;++ j){
+		cout << vals[m * n - 1] << endl;
+		for(int j = 0;j < 1;++ j){
 			//generate random 2D array with distinct numbers.
 			std::random_shuffle(vals, vals + m * n);
-			unsigned int comparisions = 0;
-			pair<unsigned int, unsigned int> index = localMinimum(vals, m, n, comparisions);
-			/*for(unsigned int i = 0;i < m;++ i){
+			comparisions = 0;
+			index = buggyLocalMinimum(failArray, 7, 9, comparisions);
+			if(comparisions == 0)
+			for(unsigned int i = 0;i < m;++ i){
 				for(unsigned int j = 0;j < n;++ j){
 					if(i == index.first && j == index.second)
 						cout << "*** ";
@@ -369,17 +560,33 @@ void testLocalMinimun(int argc, char *argv[]){
 						cout << vals[i * n + j] << ' ';
 				}
 				cout << endl;
-			}*/
-			//After running serveral tests we could see that, it takes less than 3*(m + n)
-			//and greater than 2*(m + n) comparisions to find a local minimum of the
-			//2D array, this lower bound and upper are not coincidences. It can be shown
-			//by rigorous proof.
+			}
 			cout << "local minimum is at (" << index.first << "," << index.second << ") : "
 				<< vals[index.first * n + index.second] << ", number of comparisions : "
 				<< comparisions << ", ratio : " << (comparisions / (double)(m + n)) << endl;
 		}
+		delete []vals;
 	}
 }
+void testSpeicalArray(unsigned int m, unsigned int n, unsigned int min){
+	int *vals = new int[m * n];
+	generateSpecialArray(vals, m, n, min);
+	output(cout, vals, m, n);
+	delete []vals;
+}
+void testSpeicalArray(int argc, char *argv[]){
+	testSpeicalArray(23, 20, 100);
+	cout << "------------------" << endl;
+	testSpeicalArray(15, 10, 100);
+	cout << "------------------" << endl;
+	testSpeicalArray(14, 10, 100);
+	cout << "------------------" << endl;
+	testSpeicalArray(13, 10, 100);
+	cout << "------------------" << endl;
+	testSpeicalArray(12, 10, 100);
+	cout << "------------------" << endl;
+	testSpeicalArray(12, 5, 100);
+}
 int main(int argc, char *argv[]){
-	couponCollectorProlem(argc, argv);
+	testLocalMinimun(argc, argv);
 }
