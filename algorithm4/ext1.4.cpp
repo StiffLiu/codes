@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <iterator>
 #include <fstream>
-
+//This time git hub is ok.
 using namespace std;
 /*
  * If an integer is randomly choosen from the range 1~N,
