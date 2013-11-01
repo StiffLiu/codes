@@ -821,6 +821,4 @@ int test25(int argc, char *argv[]) {
 	 copy(states.begin(), states.end(), ostream_iterator<char>(cout, ""));*/
 	return 0;
 }
-int main(int argc, char *argv[]){
-	return test25(argc, argv);
-}
+

@@ -229,7 +229,14 @@ unsigned int localMinimum(T* val, unsigned int n){
  *	T(m, n) = T(m / 2, n / 2) + O(m + n)
  * Upper bound of this algorithm in worst case situation in terms of the number of comparisions
  * made is about 16 * (m + n).
- * But the average case is very good
+ * But the average case is very good.
+ *
+ * When we're talking about local minimum of an 2D array in this file,
+ * we're assuming that the elements in the 2D array are distinct.
+ */
+
+/*
+ * test whether
  */
 template<class T>
 inline bool isLocalMinimum(const T *array2D, unsigned int m, 
@@ -305,9 +312,23 @@ template<class T>
 void output(ostream& os, const T *vals, unsigned int m, unsigned int n){
 	output(os, vals, n, 0, m - 1, 0, n - 1);
 }
+/*
+ * A 2D array may have many local minimums ,especially a random 2D array.
+ * But sometimes when we're designing and implementing algorithms we need to take
+ * the worst case into consideration.
+ *
+ * The brute-force way to find local minimum takes O(m*n) time in worst case.
+ * But It's very unlikely that a random 2D array have only one local minimum, and
+ * the only one local minimum is at the last row and last column of the 2D array.
+ *
+ * These functions given bellow "calculateOdd", "calculateEven", "generateSpecialArray"
+ * are used to generate 2D array with the property that :
+ * 		It has only one local minimum.
+ * 		The local minimum is located at the given row and column.
+ */
 unsigned int calculateOdd(unsigned int n ,unsigned int total, 
 	unsigned int offset, unsigned int i, unsigned int j){
-	int tmp;
+	unsigned int tmp;
 	switch(i % 4){
 	case 0:
 		if(j > 0)
@@ -333,7 +354,7 @@ unsigned int calculateOdd(unsigned int n ,unsigned int total,
 }
 unsigned int calculateEven(unsigned int n ,unsigned int total, 
 	unsigned int offset, unsigned int i, unsigned int j){
-	int tmp;
+	unsigned int tmp;
 	switch(i % 4){
 	case 0:
 		tmp = i / 4 * 2 * (n + 1) + j;
@@ -523,26 +544,30 @@ void testLocalMinimun(int argc, char *argv[]){
 	}
 	//test for local minimum of 2D array
 	{
-		int failArray[] = {
-			39, 38, 37, 36, 35, 34, 33, 32, 31,
-			40, 41, 42, 43, 44, 45, 46, 47, 30,
-			21, 22, 23, 24, 25, 26, 27, 28, 29,
-			20, 48, 49, 50, 51, 52, 53, 54, 55,
-			2, 18, 17, 16, 15, 14, 13, 12, 11,
-			56, 57, 58, 59, 60, 61, 62, 63, 10,
-			4, 3, 19, 1, 5, 6, 7, 8, 9,
-		};
+		/*
+		 * This following test would make buggyLocalMinimum
+		 * fail. After trying to give a rigorous proof of the
+		 * correctness of the algorithm given in buggyLocalMinimum,
+		 * I concluded that the algorithm is incorrect.
+		 * This test case is deliberately designed to validate that
+		 * it's incorrect.
+		 */
+//		unsigned int comparisions = 0;
+//		int failArray[] = {
+//					39, 38, 37, 36, 35, 34, 33, 32, 31,
+//					40, 41, 42, 43, 44, 45, 46, 47, 30,
+//					21, 22, 23, 24, 25, 26, 27, 28, 29,
+//					20, 48, 49, 50, 51, 52, 53, 54, 55,
+//					2, 18, 17, 16, 15, 14, 13, 12, 11,
+//					56, 57, 58, 59, 60, 61, 62, 63, 10,
+//					4, 3, 19, 1, 5, 6, 7, 8, 9,
+//				};
+//		buggyLocalMinimum(failArray, 7, 9, comparisions);
+	}
+	{
+
 		unsigned int comparisions = 0;
-		pair<unsigned int, unsigned int> index = buggyLocalMinimum(failArray, 7, 9, comparisions);
-		for(unsigned int i = 0;i < 7;++ i){
-			for(unsigned int j = 0;j < 9;++ j){
-				if(i == index.first && j == index.second)
-					cout << "*** ";
-				else
-					cout << failArray[i * 9 + j] << ' ';
-			}
-			cout << endl;
-		}
+
 		const unsigned int m = 200;
 		const unsigned int n = 200;
 		int *vals = new int[m * n];
@@ -553,7 +578,7 @@ void testLocalMinimun(int argc, char *argv[]){
 			//generate random 2D array with distinct numbers.
 			std::random_shuffle(vals, vals + m * n);
 			comparisions = 0;
-			index = buggyLocalMinimum(failArray, 7, 9, comparisions);
+			pair<unsigned int, unsigned int> index = buggyLocalMinimum(vals, 7, 9, comparisions);
 			if(comparisions == 0)
 			for(unsigned int i = 0;i < m;++ i){
 				for(unsigned int j = 0;j < n;++ j){
