@@ -19,7 +19,8 @@ unsigned int insertionSort(T *values, unsigned int n, Comparator comparator) {
 		//loop invariant:
 		//	the values in the range (j, i] is greater than "val"
 		//  the ranges [0, j ) and (j, i] is sorted.
-		for (; j > 0 && (arrayAccesses++, values[j - 1] > val); --j) {
+		for (; j > 0 && comparator(val, (arrayAccesses++, values[j - 1]));
+				--j) {
 			values[j] = values[j - 1];
 		}
 		arrayAccesses += ((i - j) * 2 + 1);
@@ -51,15 +52,21 @@ unsigned int medianNSelect(T *values, unsigned int n, Comparator comparator) {
 		for (unsigned int i = 0; i < g; ++i, startIndex += num) {
 			arrayAccesses += insertionSort(values + startIndex, num,
 					comparator);
+
+			T tmp = values[i];
 			values[i] = values[startIndex + median];
+			values[startIndex + median] = tmp;
 		}
-		arrayAccesses += 2 * g;
+		arrayAccesses += 3 * g;
 
 		unsigned int remaining = n - startIndex;
 		if (remaining != 0) {
 			arrayAccesses += insertionSort(values, remaining, comparator);
+
+			T tmp = values[g];
 			values[g] = values[startIndex + remaining / 2];
-			arrayAccesses += 2;
+			values[startIndex + remaining / 2] = tmp;
+			arrayAccesses += 3;
 			++g;
 		}
 
@@ -83,25 +90,25 @@ unsigned int medianNSelect(T *values, unsigned int n) {
  *     are returned, such as the number of array accesses, used by this algorithm.
  */
 template<class T, class Comparator>
-unsigned int partition(T *values, T pivot, unsigned int n, unsigned int& arrayAccesses,
-		Comparator comparator) {
+unsigned int partition(T *values, T pivot, unsigned int n,
+		unsigned int& arrayAccesses, Comparator comparator) {
 	unsigned int i = 0;
 	unsigned int j = 0;
 	//loop invariant:
 	//      the elements in the range [0, i) is no greater than "pivot"
 	//      and the elements in the range [i, j) is greater than "pivot"
-	while(j < n){
-		arrayAccesses ++;
-		if(!comparator(pivot, values[j])){
-			if(i != j){
+	while (j < n) {
+		arrayAccesses++;
+		if (!comparator(pivot, values[j])) {
+			if (i != j) {
 				T tmp = values[i];
 				values[i] = values[j];
 				values[j] = tmp;
 				arrayAccesses += 3;
 			}
-			++ i;
+			++i;
 		}
-		++ j;
+		++j;
 	}
 	return i;
 }
@@ -109,7 +116,8 @@ unsigned int partition(T *values, T pivot, unsigned int n, unsigned int& arrayAc
  * partition using the default comparator.
  */
 template<class T>
-unsigned int partition(T *values, T pivot, unsigned int n, unsigned int& arrayAccesses) {
+unsigned int partition(T *values, T pivot, unsigned int n,
+		unsigned int& arrayAccesses) {
 	return partition(values, pivot, n, arrayAccesses, less<T>());
 }
 /**
@@ -121,11 +129,12 @@ unsigned int partition(T *values, T pivot, unsigned int n, unsigned int& arrayAc
  */
 template<class T, class Comparator>
 unsigned int partition(T *values, unsigned int n, unsigned int& arrayAccesses,
-		Comparator comparator){
-	if(n == 1)
+		Comparator comparator) {
+	if (n == 1)
 		return 0;
-	unsigned int p = partition(values, values[n - 1], n - 1, arrayAccesses, comparator);
-	if(p != n - 1){
+	unsigned int p = partition(values, values[n - 1], n - 1, arrayAccesses,
+			comparator);
+	if (p != n - 1) {
 		T tmp = values[p];
 		values[p] = values[n - 1];
 		values[n - 1] = tmp;
@@ -137,16 +146,17 @@ unsigned int partition(T *values, unsigned int n, unsigned int& arrayAccesses,
  * partition using the default comparator.
  */
 template<class T>
-unsigned int partition(T *values, unsigned int n, unsigned int& arrayAccesses){
+unsigned int partition(T *values, unsigned int n, unsigned int& arrayAccesses) {
 	return partition(values, n, arrayAccesses, less<T>());
 }
 /**
  * partition using a random value in the input array as the "pivot"
  */
 template<class T, class Comparator>
-unsigned int randPartition(T *values, unsigned int n, unsigned int& arrayAccesses, Comparator comparator){
+unsigned int randPartition(T *values, unsigned int n,
+		unsigned int& arrayAccesses, Comparator comparator) {
 	unsigned int index = rand() % n;
-	if(index != n -1){
+	if (index != n - 1) {
 		T tmp = values[index];
 		values[index] = values[n - 1];
 		values[n - 1] = tmp;
@@ -158,12 +168,14 @@ unsigned int randPartition(T *values, unsigned int n, unsigned int& arrayAccesse
  * partition using the default comparator.
  */
 template<class T>
-unsigned int randPartition(T *values, unsigned int n, unsigned int& arrayAccesses){
+unsigned int randPartition(T *values, unsigned int n,
+		unsigned int& arrayAccesses) {
 	return randPartition(values, n, arrayAccesses, less<T>());
 }
 template<class T, class Comparator>
-unsigned int medianNPartiton(T *values, unsigned int n, unsigned int& arrayAccesses, Comparator comparator){
-	if(n <= 1)
+unsigned int medianNPartition(T *values, unsigned int n,
+		unsigned int& arrayAccesses, Comparator comparator) {
+	if (n <= 1)
 		return 0;
 	arrayAccesses += medianNSelect(values, n, comparator);
 
@@ -177,25 +189,83 @@ unsigned int medianNPartiton(T *values, unsigned int n, unsigned int& arrayAcces
  * partition using the default comparator.
  */
 template<class T>
-unsigned int medianNPartiton(T *values, unsigned int n, unsigned int& arrayAccesses){
-	return medianNPartiton(values, n, arrayAccesses, less<T>());
+unsigned int medianNPartition(T *values, unsigned int n,
+		unsigned int& arrayAccesses) {
+	return medianNPartition(values, n, arrayAccesses, less<T>());
 }
-void randInts(unsigned int *values, unsigned int n, unsigned int maxValue);
-extern bool isSorted(unsigned int *values, unsigned int n);
+
 template<class T, class Comparator>
-bool isPartitionedByIndex(T *values, unsigned int n, unsigned int p, Comparator comparator){
-	for(unsigned int i = 0;i < p;++ i)
-		if(comparator(values[p], values[i]))
+bool isPartitionedByIndex(T *values, unsigned int n, unsigned int p,
+		Comparator comparator) {
+	for (unsigned int i = 0; i < p; ++i)
+		if (comparator(values[p], values[i]))
 			return false;
-	for(unsigned int i = p + 1;i < n;++ i)
-		if(!comparator(values[p], values[i]))
+	for (unsigned int i = p + 1; i < n; ++i)
+		if (!comparator(values[p], values[i]))
 			return false;
 	return true;
 }
 template<class T>
-bool isPartitionedByIndex(T *values, unsigned int n, unsigned int p){
+bool isPartitionedByIndex(T *values, unsigned int n, unsigned int p) {
 	return isPartitionedByIndex(values, n, p, less<T>());
 }
+template<class T, class U>
+void calculateSum(T *values, unsigned int start, unsigned int end, U& val) {
+	for (unsigned int i = start; i < end; ++i)
+		val += values[i].second;
+}
+/*
+ * This procedure assumes that type "T" contains a member variable, which is named "second"
+ *  and is of type "U".This member variable represents the weight.
+ *  "weightMedian" is a value that will be used by this procedure.
+ *  "weightTotal" must be the sum of weights of all the elements in the input array.
+ *  This procedure partitions the input array, and returns the partition index.
+ *  Assume that the returned partition index is "p", then the following properties hold after the partition is done :
+ *  	Every element in the range [0, p) is no greater than "values[p]", and the sum of weights of elements in this range is less than "weightMedian".
+ *  	Every element in the range (p + 1, n) is no less than "values[p]", and the sum of weights of elements in this range is no greater than "weightMedian".
+ */
+template<class T, class U, class Comparator>
+unsigned int weightedMedian(T *values, U weightMedian, U weightTotal,
+		unsigned int n, unsigned int& arrayAccesses, Comparator comparator) {
+	if (n <= 1)
+		return 0;;
+	unsigned int startIndex = 0;
+	unsigned int endIndex = n;
+	U lowerHalfSum = U();
+	while (startIndex < endIndex - 1) {
+		unsigned int p = startIndex
+				+ /*randPartition*/medianNPartition(values + startIndex,
+						endIndex - startIndex, arrayAccesses, comparator);
+		U tmpSum = lowerHalfSum;
+		calculateSum(values, startIndex, p, tmpSum);
+		arrayAccesses += (p - startIndex);
+		if (tmpSum < weightMedian) {
+			if (!(weightMedian
+					< weightTotal - tmpSum - (arrayAccesses++, values[p]).second))
+				return p;
+			startIndex = p;
+			lowerHalfSum = tmpSum;
+		} else {
+			endIndex = p;
+		}
+	}
+	return startIndex;
+}
+template<class T>
+unsigned int weightedMedian(pair<T, double> *values, unsigned int n,
+		unsigned int& arrayAccesses) {
+	typedef pair<T, double> Type;
+	class Func {
+	public:
+		static bool func(const Type& v1, const Type& v2) {
+			return v1.first < v2.first;
+		}
+	};
+	return weightedMedian(values, 0.5, 1.0, n, arrayAccesses, Func::func);
+}
+extern void randInts(unsigned int *values, unsigned int n,
+		unsigned int maxValue);
+extern bool isSorted(unsigned int *values, unsigned int n);
 int testSelectMedian(int argc, char *argv[]) {
 	const unsigned int n = 10000;
 	unsigned int values[n];
@@ -216,7 +286,7 @@ int testSelectMedian(int argc, char *argv[]) {
 	}
 	return 0;
 }
-int testPartitionRandom(int argc, char *argv[]){
+int testPartitionRandom(int argc, char *argv[]) {
 	const unsigned int n = 1000;
 	unsigned int values[n];
 	unsigned int array1[n];
@@ -225,7 +295,7 @@ int testPartitionRandom(int argc, char *argv[]){
 
 	unsigned int maxValue = 1000;
 
-	for(unsigned int i = 0;i < 10;++ i){
+	for (unsigned int i = 0; i < 10; ++i) {
 
 		randInts(values, n, maxValue);
 		//sort(values, values + n);
@@ -236,33 +306,85 @@ int testPartitionRandom(int argc, char *argv[]){
 		unsigned int arrayAccesses1 = 0, arrayAccesses2 = 0, arrayAccesses3 = 0;
 		unsigned int p1 = partition(array1, n, arrayAccesses1);
 		unsigned int p2 = randPartition(array2, n, arrayAccesses2);
-		unsigned int p3 = medianNPartiton(array3, n, arrayAccesses3);
+		unsigned int p3 = medianNPartition(array3, n, arrayAccesses3);
 
 		assert(isPartitionedByIndex(array1, n, p1));
 		assert(isPartitionedByIndex(array2, n, p2));
 		assert(isPartitionedByIndex(array3, n, p3));
 
-		cout << "parition :  index - " << p1 << ", number of array accesses - " <<  arrayAccesses1 << endl;
-		cout << "random parition :  index - " << p2 << ", number of array accesses - " <<  arrayAccesses2 << endl;
-		cout << "median n parition :  index - " << p3 << ", number of array accesses - " <<  arrayAccesses3 << endl;
+		cout << "parition :  index - " << p1 << ", number of array accesses - "
+				<< arrayAccesses1 << endl;
+		cout << "random parition :  index - " << p2
+				<< ", number of array accesses - " << arrayAccesses2 << endl;
+		cout << "median n parition :  index - " << p3
+				<< ", number of array accesses - " << arrayAccesses3 << endl;
 
 		cout << endl;
 	}
 	return 0;
 }
-int testPartition(int argc, char *argv[]){
+int testPartition(int argc, char *argv[]) {
 	const unsigned int n = 20;
 	unsigned int values[n];
 	unsigned int arrayAccesses = 0;
 	unsigned int p;
 	randInts(values, n, 100);
 	cout << "before partition :";
-	copy(values, values +n, ostream_iterator<int>(cout, " "));
+	copy(values, values + n, ostream_iterator<int>(cout, " "));
 	cout << endl;
 	p = partition(values, n, arrayAccesses);
 	cout << "partition index : " << p << endl;
 	cout << "after partition : ";
-	copy(values, values +n, ostream_iterator<int>(cout, " "));
+	copy(values, values + n, ostream_iterator<int>(cout, " "));
 	cout << endl;
 	return testPartitionRandom(argc, argv);
+}
+template<class T>
+void generateRandom(pair<T, double> *values, unsigned int n,
+		unsigned int maxValue) {
+	double sum = 0;
+	for (unsigned int i = 0; i < n; ++i) {
+		values[i].first = rand() % maxValue;
+		values[i].second = rand() % maxValue;
+		sum += values[i].second;
+	}
+
+	double current = 0.0;
+	for (unsigned int i = 0; i < n; ++i) {
+		if (current >= 1.0)
+			values[i].second = 0.0;
+		else
+			values[i].second /= sum;
+		current += values[i].second;
+	}
+}
+int testWeightedMedian(int argc, char *argv[]) {
+	typedef pair<unsigned int, double> Type;
+	const unsigned int n = 1000;
+	const unsigned int maxValue = 1000;
+	Type values[n];
+	double maxRatio = 0.0;
+	double minRatio = n;
+	double averageRatio = 0.0;
+	const unsigned iteration = 100;
+	for (unsigned int i = 0; i < iteration; ++i) {
+		double tSum = 0.0;
+		generateRandom(values, n, maxValue);
+		unsigned int arrayAccesses = 0;
+		unsigned int p = weightedMedian(values, n, arrayAccesses);
+		double lSum = 0.0, rSum = 0.0;
+		double ratio = (arrayAccesses / (double) n);
+		calculateSum(values, 0, p, lSum);
+		calculateSum(values, 0, n, tSum);
+		calculateSum(values, p + 1, n, rSum);
+		cout << "array accesses : " << arrayAccesses << ", ratio : " << ratio
+				<< ", " << lSum << ", " << rSum << endl;
+		assert(lSum < 0.5 && rSum <= 0.5);
+		maxRatio = max(maxRatio, ratio);
+		minRatio = min(minRatio, ratio);
+		averageRatio += ratio;
+	}
+	cout << "maxRatio : " << maxRatio << ", minRatio : " << minRatio
+			<< ", average ratio : " << (averageRatio / iteration) << endl;
+	return 0;
 }
