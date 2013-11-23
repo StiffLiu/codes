@@ -6,7 +6,23 @@
 #include <cassert>
 #include <algorithm>
 using namespace std;
+/*Also every procedure
+ *        in this file is intended as experiments. The costs of the procedures will be measured
+ *        and will be compared with the problem size. The measurement of almost every
+ *        procedure in this file is the number of array access. That's why many of the procedures
+ *        in this file counts the number of array accesses.
+ *
+ */
 
+/**
+ *
+ * insertion sort.
+ *
+ * @param values The array to be sorted.
+ * @param n Number of arrays in the input array.
+ * @param comparator The number of
+ * @return The number of array accesses is returned.
+ */
 template<class T, class Comparator>
 unsigned int insertionSort(T *values, unsigned int n, Comparator comparator) {
 
@@ -25,9 +41,9 @@ unsigned int insertionSort(T *values, unsigned int n, Comparator comparator) {
 		}
 		arrayAccesses += ((i - j) * 2 + 1);
 
-		//When the for loop is terminated, there are two cases:
-		//         j == 0,  we have reached beginning of the array.
-		//         values[j - 1] <= val, since the range [0, i) is sorted we could
+		//there are two cases, when the for loop is terminated :
+		//        case 1 :  j == 0,  we have reached the beginning of the array.
+		//        case 2 :  values[j - 1] <= val, since the range [0, i) is sorted we could
 		//                  conclude that all the element in the range [0, j - 1] is no greater than "val".
 		if (j != i) {
 			values[j] = val;
@@ -80,14 +96,14 @@ unsigned int medianNSelect(T *values, unsigned int n) {
 }
 
 /**
- * partition the elements in values, into two parts.
+ * partition the elements in "values", into two parts.
  * The partition index "p" with pivot "pivot" is defined as:
  *      the elements in the range [0, p) is no greater than "pivot" and
  *      the elements in the range [p, n) is greater than "pivot".
  * If every elements in the range [0, n) is no greater than "pivot", then "n" is returned,
  *     else the partition index is returned.
  * Note that these implementations are just for experimentations, thus some extra values
- *     are returned, such as the number of array accesses, used by this algorithm.
+ *     are returned, such as the number of array accesses used by this procedure.
  */
 template<class T, class Comparator>
 unsigned int partition(T *values, T pivot, unsigned int n,
@@ -209,6 +225,21 @@ template<class T>
 bool isPartitionedByIndex(T *values, unsigned int n, unsigned int p) {
 	return isPartitionedByIndex(values, n, p, less<T>());
 }
+template<class T, class Comparator>
+bool isPartitionedByIndex0(T *values, unsigned int n, unsigned int p,
+		Comparator comparator) {
+	for (unsigned int i = 0; i < p; ++i)
+		if (comparator(values[p], values[i]))
+			return false;
+	for (unsigned int i = p + 1; i < n; ++i)
+		if (comparator(values[i], values[p]))
+			return false;
+	return true;
+}
+template<class T>
+bool isPartitionedByIndex0(T *values, unsigned int n, unsigned int p) {
+	return isPartitionedByIndex0(values, n, p, less<T>());
+}
 template<class T, class U>
 void calculateSum(T *values, unsigned int start, unsigned int end, U& val) {
 	for (unsigned int i = start; i < end; ++i)
@@ -240,8 +271,8 @@ unsigned int weightedMedian(T *values, U weightMedian, U weightTotal,
 		calculateSum(values, startIndex, p, tmpSum);
 		arrayAccesses += (p - startIndex);
 		if (tmpSum < weightMedian) {
-			if (!(weightMedian
-					< weightTotal - tmpSum - (arrayAccesses++, values[p]).second))
+			if (!(weightMedian + tmpSum + (arrayAccesses++, values[p]).second
+					< weightTotal))
 				return p;
 			startIndex = p;
 			lowerHalfSum = tmpSum;
@@ -262,6 +293,74 @@ unsigned int weightedMedian(pair<T, double> *values, unsigned int n,
 		}
 	};
 	return weightedMedian(values, 0.5, 1.0, n, arrayAccesses, Func::func);
+}
+/**
+ * The kth order statistic of an array is the kth smallest element in the array
+ * @param values The input array.
+ * @param n Number of elements in the array.
+ * @param k The index at which the kth order statitistic will be placed.
+ * @param comparator The functor used to compare element.
+ *        If the first element is less than the second element, this functor
+ *        should return true.
+ *
+ * @return The number of array accesses used by this procedure.
+ */
+template<class T, class Comparator>
+unsigned int kthOrderStatistic(T *values, unsigned int n, unsigned int k,
+		Comparator comparator) {
+	if (k >= n)
+		return 0;
+	unsigned int arrayAccesses = 0;
+	while (n > 0) {
+		unsigned int p = randPartition(values, n, arrayAccesses, comparator);
+		if (p == k)
+			break;
+		if (p < k) {
+			values += (p + 1);
+			n -= (p + 1);
+			k -= (p + 1);
+			continue;
+		}
+		n = p;
+	}
+	return arrayAccesses;
+}
+template<class T>
+unsigned int kthOrderStatistic(T *values, unsigned int n, unsigned int k) {
+	return kthOrderStatistic(values, n, k, less<T>());
+}
+template<class T, class Comparator>
+unsigned int kQuantiles(T *values, unsigned int n, unsigned int k,
+		Comparator comparator) {
+	if (n <= 1 || k <= 1)
+		return 0;
+	assert(k <= n);
+	unsigned int m = n / k;
+	unsigned int b = 0;
+	unsigned int a = k;
+	if (n % k != 0) {
+		++m;
+		b = k * m - n;
+		a -= b;
+	}
+
+	unsigned int i = 0;
+	unsigned int startIndex = 0;
+	if (2 * a * m > n) {
+		for (; i < a && 2 * i * m < n; ++i)
+			;
+
+		startIndex = i * m;
+	} else {
+		i = a;
+		startIndex = i * m;
+		for (; i < k && 2 * startIndex < n; ++i, startIndex += (m - 1))
+			;
+	}
+	//select the "startIndex"-th order statistics.
+	unsigned int arrayAccesses = kthOrderStatistic(values, 0, n, startIndex);
+	return kQuantiles(values, startIndex, i, comparator)
+			+ kQuantiles(values + startIndex, n - startIndex, k - i, comparator);
 }
 extern void randInts(unsigned int *values, unsigned int n,
 		unsigned int maxValue);
@@ -380,6 +479,29 @@ int testWeightedMedian(int argc, char *argv[]) {
 		cout << "array accesses : " << arrayAccesses << ", ratio : " << ratio
 				<< ", " << lSum << ", " << rSum << endl;
 		assert(lSum < 0.5 && rSum <= 0.5);
+		maxRatio = max(maxRatio, ratio);
+		minRatio = min(minRatio, ratio);
+		averageRatio += ratio;
+	}
+	cout << "maxRatio : " << maxRatio << ", minRatio : " << minRatio
+			<< ", average ratio : " << (averageRatio / iteration) << endl;
+	return 0;
+}
+int testKthOrderStatistic(int argc, char *argv[]) {
+	const unsigned int n = 10000;
+	unsigned int values[n];
+	unsigned int maxValue = 10000;
+	double maxRatio = 0;
+	double minRatio = n;
+	double averageRatio = 0;
+	double iteration = n;
+	srand(time(0));
+	for (unsigned int i = 0; i < iteration; ++i) {
+		double ratio = 0;
+		randInts(values, n, maxValue);
+		ratio = kthOrderStatistic(values, n, i) / (double) n;
+		cout << i << "-th order statistic ratio : " << ratio << endl;
+		assert(isPartitionedByIndex0(values, n, i));
 		maxRatio = max(maxRatio, ratio);
 		minRatio = min(minRatio, ratio);
 		averageRatio += ratio;
