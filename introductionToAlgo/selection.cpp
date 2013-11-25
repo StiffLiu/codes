@@ -5,6 +5,7 @@
 #include <ctime>
 #include <cassert>
 #include <algorithm>
+#include <cmath>
 using namespace std;
 /*Every procedure
  *        in this file is intended as experiments. The costs of the procedures will be measured
@@ -390,28 +391,91 @@ template<class T>
 unsigned int kQuantiles(T *values, unsigned int n, unsigned int k) {
 	return kQuantiles(values, n, k, less<T>());
 }
+/*
+ * This procedure calculates the k numbers in an array that are closest to the median of the array.
+ * These k elements are placed in the range [n / 2 - k / 2,  n / 2 - k / 2  + k).
+ * "comparator" is a functor that defines the "smaller" relation between two elements.
+ * The expected running time of this algorithm is O(n) if the elements in the input array are (or almost) distinct.
+ * To measure the performance of the algorithm, the number of array accesses is returned.
+ */
 template<class T, class Comparator>
 unsigned int closestToMedian(T *values, unsigned int n, unsigned int k,
 		Comparator comparator) {
-	if(k >= n || k <= 0)
+	if (k >= n || k <= 0)
 		return 0;
 	unsigned int start = n / 2 - k / 2;
-	unsigned int arrayAccesses = kthOrderStatistic(values, n, start, comparator);
-	if(k > 1)
-		arrayAccesses += kthOrderStatistic(values + start, n, k - 1, comparator);
+	unsigned int arrayAccesses = kthOrderStatistic(values, n, start,
+			comparator);
+	if (k > 1)
+		arrayAccesses += kthOrderStatistic(values + start, n, k - 1,
+				comparator);
 	return arrayAccesses;
 }
 template<class T>
-unsigned int closestToMedian(T *values, unsigned int n, unsigned int k){
+unsigned int closestToMedian(T *values, unsigned int n, unsigned int k) {
 	return closestToMedian(values, n, k, less<T>());
 }
+/*
+ * Calculate the kth order statistic of two sorted arrays.
+ * This cost of this algorithm is O(lg(max(n1, n2))) in worst case.
+ * Where "n1" and "n2" are the number of elements in the two sorted arrays.
+ */
 template<class T, class Comparator>
-T medianOfTwoOrderedArray(T *ordered1, T *ordered2, unsigned int n, Comparator comparator){
-	while(n > 0){
-		int k = n / 2;
-
+std::pair<T*, unsigned int> kthOrderStatisticOf2OrderedArrays(T *ordered1,
+		unsigned int n1, T *ordered2, unsigned int n2, unsigned int k,
+		unsigned int& arrayAccesses, Comparator comparator) {
+	if (k > n1 + n2 && k != 0)
+		k = n1 + n2 - 1;
+	unsigned int s1 = 0, e1 = n1, s2 = 0, e2 = n2;
+	while (k > 0 && e1 > s1 && e2 > s2) {
+		int m1 = (e1 + s1) / 2;
+		int m2 = (e2 + s2) / 2;
+		int r1 = m1 - s1;
+		int r2 = m2 - s2;
+		int r = r1 + r2;
+		if ((arrayAccesses += 2, comparator(ordered2[m2], ordered1[m1]))) {
+			if (k > r) {
+				s2 = m2 + 1;
+				k -= (r2 + 1);
+			} else {
+				e1 = m1;
+			}
+		} else if ((arrayAccesses += 2, comparator(ordered1[m1], ordered2[m2]))) {
+			if (k > r) {
+				s1 = m1 + 1;
+				k -= (r1 + 1);
+			} else {
+				e2 = m2;
+			}
+		} else {
+			if (r == k || r + 1 == k) {
+				return make_pair(ordered1, m1);
+			}
+			if (k < r) {
+				e1 = m1;
+				e2 = m2;
+			} else {
+				s1 = m1 + 1;
+				s2 = m2 + 1;
+				k -= (r + 2);
+			}
+		}
 	}
-	return comparator(ordered2[0],  ordered1[0]) ? ordered2[0] : ordered1[0];
+
+	if (e1 <= s1)
+		return make_pair(ordered2, s2 + k);
+	if (e2 <= s2)
+		return make_pair(ordered1, s1 + k);
+	if (comparator(ordered1[s1], ordered2[s2]))
+		return make_pair(ordered1, s1);
+	return make_pair(ordered2, s2);
+}
+template<class T>
+std::pair<T*, unsigned int> kthOrderStatisticOf2OrderedArrays(T *ordered1,
+		unsigned int n1, T *ordered2, unsigned int n2, unsigned int k,
+		unsigned int& arrayAccesses) {
+	return kthOrderStatisticOf2OrderedArrays(ordered1, n1, ordered2, n2, k,
+			arrayAccesses, less<T>());
 }
 template<class T, class Comparator>
 bool iskQuantiles(T *values, unsigned int n, unsigned int k,
@@ -628,4 +692,47 @@ int testKQuantiles(int argc, char *argv[]) {
 	copy(values, values + n, ostream_iterator<unsigned int>(cout, " "));
 	cout << endl;
 	return ret;
+}
+int testStaticsticOf2OrderedArrays(int argc, char *argv[]) {
+	const unsigned int n = 1000;
+	unsigned int input1[n];
+	unsigned int input2[n];
+	unsigned int input3[2 * n];
+	unsigned int maxInt = n * n;
+	double maxRatio = 0;
+	double minRatio = n;
+	double averageRatio = 0;
+	double iteration = n;
+	double log2n = log(n) / log(2);
+	srand(time(0));
+	for (unsigned int j = 0; j < iteration; ++j) {
+		for (unsigned int i = 0; i < n; ++i) {
+			input1[i] = rand() % maxInt;
+			input2[i] = rand() % maxInt;
+			input3[2 * i] = input1[i];
+			input3[2 * i + 1] = input2[i];
+		}
+
+		sort(input1, input1 + n);
+		sort(input2, input2 + n);
+		sort(input3, input3 + 2 * n);
+
+		unsigned int arrayAccesses = 0;
+		unsigned int k = rand() % ( 2 * n);
+		pair<unsigned int*, int> result = kthOrderStatisticOf2OrderedArrays(
+				input1, n, input2, n, k, arrayAccesses);
+		if(result.first[result.second] != input3[k])
+			result = kthOrderStatisticOf2OrderedArrays(
+							input1, n, input2, n, k, arrayAccesses);
+		assert(result.first[result.second] == input3[k]);
+		double ratio = arrayAccesses / log2n;
+
+		maxRatio = max(maxRatio, ratio);
+		minRatio = min(minRatio, ratio);
+		averageRatio += ratio;
+		cout << j << " : " << ratio << endl;
+	}
+	cout << "maxRatio : " << maxRatio << ", minRatio : " << minRatio
+			<< ", average ratio : " << (averageRatio / iteration) << endl;
+	return 0;
 }
