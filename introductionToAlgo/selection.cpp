@@ -6,21 +6,27 @@
 #include <cassert>
 #include <algorithm>
 using namespace std;
-/*Also every procedure
+/*Every procedure
  *        in this file is intended as experiments. The costs of the procedures will be measured
  *        and will be compared with the problem size. The measurement of almost every
  *        procedure in this file is the number of array access. That's why many of the procedures
  *        in this file counts the number of array accesses.
  *
+ *Many of the cost assertions of algorithms in this file is based on the hypothesis that the elements
+ *        of an array are distinct or almost distinct.Otherwise, say every(or almost every )element in an array is the same,
+ *        If not stated specifically,  then the cost of worst case should apply if the cost is stated.
  */
 
 /**
  *
  * insertion sort.
- *
+ * The cost of worst case insertion sort is O(n * n), for example when the array is ordered in "decreasing" order.
+ * The cost of best case insertion sort is O(n), when the array is(or almost is) sorted in "non-decreasing" order.
+ * However, the cost of insertion sort on average is O(n * n).
  * @param values The array to be sorted.
  * @param n Number of arrays in the input array.
- * @param comparator The number of
+ * @param comparator A functor that defines the "smaller" relation between two elements.
+ *               If the first element is "smaller" than the second, then "true" should be returned.
  * @return The number of array accesses is returned.
  */
 template<class T, class Comparator>
@@ -56,6 +62,13 @@ template<class T>
 unsigned int insertionSort(T *values, unsigned int n) {
 	return insertionSort(values, n, less<T>());
 }
+/*
+ * The cost of selection algorithms is decided by the choosing of pivot element.
+ * If at every step a pivot is chosen such that the partition produces a very bad split,
+ * for example when the smallest or the greatest element, the cost of selection algorithm
+ * would be O(n*n). This is the worst case.
+ * However if a pivot
+ */
 template<class T, class Comparator>
 unsigned int medianNSelect(T *values, unsigned int n, Comparator comparator) {
 	const unsigned int num = 5;
@@ -329,21 +342,31 @@ template<class T>
 unsigned int kthOrderStatistic(T *values, unsigned int n, unsigned int k) {
 	return kthOrderStatistic(values, n, k, less<T>());
 }
+/*
+ * Calculate a, b, and m, such that :
+ *           n = a * m + b * (m - 1),
+ * 			 k = a + b
+ */
+inline void calculate(unsigned int n, unsigned int k, unsigned int& a,
+		unsigned int& b, unsigned int& m) {
+	m = n / k;
+	a = k;
+	b = 0;
+	if (n % k != 0) {
+		++m;
+		b = k * m - n;
+		a -= b;
+	}
+}
+
 template<class T, class Comparator>
 unsigned int kQuantiles(T *values, unsigned int n, unsigned int k,
 		Comparator comparator) {
 	if (n <= 1 || k <= 1)
 		return 0;
 	assert(k <= n);
-	unsigned int m = n / k;
-	unsigned int b = 0;
-	unsigned int a = k;
-	if (n % k != 0) {
-		++m;
-		b = k * m - n;
-		a -= b;
-	}
-
+	unsigned int a, b, m;
+	calculate(n, k, a, b, m);
 	unsigned int i = 0;
 	unsigned int startIndex = 0;
 	if (2 * a * m > n) {
@@ -358,9 +381,71 @@ unsigned int kQuantiles(T *values, unsigned int n, unsigned int k,
 			;
 	}
 	//select the "startIndex"-th order statistics.
-	unsigned int arrayAccesses = kthOrderStatistic(values, 0, n, startIndex);
-	return kQuantiles(values, startIndex, i, comparator)
+	unsigned int arrayAccesses = kthOrderStatistic(values, n, startIndex,
+			comparator);
+	return arrayAccesses + kQuantiles(values, startIndex, i, comparator)
 			+ kQuantiles(values + startIndex, n - startIndex, k - i, comparator);
+}
+template<class T>
+unsigned int kQuantiles(T *values, unsigned int n, unsigned int k) {
+	return kQuantiles(values, n, k, less<T>());
+}
+template<class T, class Comparator>
+unsigned int closestToMedian(T *values, unsigned int n, unsigned int k,
+		Comparator comparator) {
+	if(k >= n || k <= 0)
+		return 0;
+	unsigned int start = n / 2 - k / 2;
+	unsigned int arrayAccesses = kthOrderStatistic(values, n, start, comparator);
+	if(k > 1)
+		arrayAccesses += kthOrderStatistic(values + start, n, k - 1, comparator);
+	return arrayAccesses;
+}
+template<class T>
+unsigned int closestToMedian(T *values, unsigned int n, unsigned int k){
+	return closestToMedian(values, n, k, less<T>());
+}
+template<class T, class Comparator>
+T medianOfTwoOrderedArray(T *ordered1, T *ordered2, unsigned int n, Comparator comparator){
+	while(n > 0){
+		int k = n / 2;
+
+	}
+	return comparator(ordered2[0],  ordered1[0]) ? ordered2[0] : ordered1[0];
+}
+template<class T, class Comparator>
+bool iskQuantiles(T *values, unsigned int n, unsigned int k,
+		Comparator comparator) {
+	if (n <= 1 || k <= 1)
+		return true;
+	assert(k <= n);
+	unsigned int a, b, m;
+	calculate(n, k, a, b, m);
+
+	unsigned int startIndex = m;
+	while (startIndex < a * m) {
+		if (!isPartitionedByIndex0(values + startIndex - m, 2 * m, m,
+				comparator))
+			return false;
+		startIndex += m;
+	}
+	if (startIndex < n) {
+		if (!isPartitionedByIndex0(values + startIndex - m, 2 * m - 1, m,
+				comparator))
+			return false;
+		startIndex += m - 1;
+		while (startIndex < n) {
+			if (!isPartitionedByIndex0(values + startIndex - m + 1, 2 * m - 2,
+					m - 1, comparator))
+				return false;
+			startIndex += (m - 1);
+		}
+	}
+	return true;
+}
+template<class T>
+bool iskQuantiles(T *values, unsigned int n, unsigned int k) {
+	return iskQuantiles(values, n, k, less<T>());
 }
 extern void randInts(unsigned int *values, unsigned int n,
 		unsigned int maxValue);
@@ -509,4 +594,38 @@ int testKthOrderStatistic(int argc, char *argv[]) {
 	cout << "maxRatio : " << maxRatio << ", minRatio : " << minRatio
 			<< ", average ratio : " << (averageRatio / iteration) << endl;
 	return 0;
+}
+int testKQuantilesRandom(int argc, char *argv[]) {
+	const unsigned int n = 10000;
+	unsigned int values[n];
+	unsigned int maxValue = 10000;
+	double maxRatio = 0;
+	double minRatio = n;
+	double averageRatio = 0;
+	double iteration = n;
+	srand(time(0));
+	for (unsigned int i = 0; i < iteration; ++i) {
+		double ratio = 0;
+		randInts(values, n, maxValue);
+		ratio = kQuantiles(values, n, i + 1) / (double) n;
+		cout << i << " quantiles ratio : " << ratio << endl;
+		assert(iskQuantiles(values, n, i + 1));
+		maxRatio = max(maxRatio, ratio);
+		minRatio = min(minRatio, ratio);
+		averageRatio += ratio;
+	}
+	cout << "maxRatio : " << maxRatio << ", minRatio : " << minRatio
+			<< ", average ratio : " << (averageRatio / iteration) << endl;
+	return 0;
+}
+int testKQuantiles(int argc, char *argv[]) {
+	const unsigned int n = 30;
+	unsigned int values[n];
+	unsigned int maxValue = 100;
+	randInts(values, n, maxValue);
+	kQuantiles(values, n, n);
+	int ret = testKQuantilesRandom(argc, argv);
+	copy(values, values + n, ostream_iterator<unsigned int>(cout, " "));
+	cout << endl;
+	return ret;
 }
