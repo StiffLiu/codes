@@ -63,13 +63,7 @@ template<class T>
 unsigned int insertionSort(T *values, unsigned int n) {
 	return insertionSort(values, n, less<T>());
 }
-/*
- * The cost of selection algorithms is decided by the choosing of pivot element.
- * If at every step a pivot is chosen such that the partition produces a very bad split,
- * for example when the smallest or the greatest element, the cost of selection algorithm
- * would be O(n*n). This is the worst case.
- * However if a pivot
- */
+
 template<class T, class Comparator>
 unsigned int medianNSelect(T *values, unsigned int n, Comparator comparator) {
 	const unsigned int num = 5;
@@ -318,6 +312,16 @@ unsigned int weightedMedian(pair<T, double> *values, unsigned int n,
  *        should return true.
  *
  * @return The number of array accesses used by this procedure.
+ *
+ * The cost of this algorithms is decided by the choosing of pivot element when we partition the input array.
+ * If at every step a pivot is chosen such that the partition produces a very bad split,
+ * for example when the smallest or the greatest element is selected every time,
+ * the cost of would be O(n*n).
+ * However if every time(or almost every time) a pivot element is selected that partition the input array
+ * into two parts such that the the number of elements in the two partitions are "a*n" and "(1-a)*n".
+ * The expected cost of this algorithm is O(n).
+ *
+ *
  */
 template<class T, class Comparator>
 unsigned int kthOrderStatistic(T *values, unsigned int n, unsigned int k,
@@ -718,12 +722,12 @@ int testStaticsticOf2OrderedArrays(int argc, char *argv[]) {
 		sort(input3, input3 + 2 * n);
 
 		unsigned int arrayAccesses = 0;
-		unsigned int k = rand() % ( 2 * n);
+		unsigned int k = rand() % (2 * n);
 		pair<unsigned int*, int> result = kthOrderStatisticOf2OrderedArrays(
 				input1, n, input2, n, k, arrayAccesses);
-		if(result.first[result.second] != input3[k])
-			result = kthOrderStatisticOf2OrderedArrays(
-							input1, n, input2, n, k, arrayAccesses);
+		if (result.first[result.second] != input3[k])
+			result = kthOrderStatisticOf2OrderedArrays(input1, n, input2, n, k,
+					arrayAccesses);
 		assert(result.first[result.second] == input3[k]);
 		double ratio = arrayAccesses / log2n;
 
