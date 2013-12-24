@@ -475,76 +475,8 @@ public:
 		experimentOne(wbhquUF, pairs, wbhquResult, wbhquResultPC);
 	}
 };
-#include <windows.h>
-#include <GL/glut.h>
-static void openGLInit(){
-	glClearColor(0.000, 0.110, 0.392, 0.0); // JMU Gold
-	glColor3f(0.314, 0.314, 0.000); // JMU Purple
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glPointSize(2.0);
-	gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
-}
-class PerformancePloter {
-public:
-	static void drawString(double x, double y, const string& s){
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glTranslatef(x, y, 0.0);
-		glScaled(0.0003, 0.0003, 0.0003);
-		for (size_t i = 0; i < s.size(); ++i)
-			glutStrokeCharacter(GLUT_STROKE_ROMAN, s[i]);
-		glPopMatrix();
-	}
-	static void drawString(double x, double y, const char *str,
-			unsigned int maxValue) {
-		ostringstream os;
-		if (str != NULL) {
-			os << str;
-			os << ", ";
-		}
-		os << "max value : " << maxValue;
-		drawString(x, y, os.str());
-	}
-	template<class T>
-	void display(const char *title, const vector<T>& data) {
-		double xStart = -0.95;
-		double yStart = -0.95;
-		double xEnd = 0.95;
-		double yEnd = 0.95;
-		double xLen = xEnd - xStart;
-		double yLen = yEnd - yStart;
-		double maxValue = data[data.size() - 1];
-		glClear(GL_COLOR_BUFFER_BIT);
-		drawString(-0.8, 0.8, title, maxValue);
-		// amortized cost.
-		glColor3f(1.0, 0.0, 0.000);
-		glBegin(GL_POINTS);
-		for (size_t i = 0; i < data.size(); ++i) {
-			double x = xStart + (i + 1) * xLen / data.size();
-			double y = yStart + yLen * data[i] / ((i + 1) * maxValue);
-			//assert(data[i] <= maxValue);
-			glVertex2f(x, y);
-		}
-		glEnd();
-		glColor3f(0.314, 0.314, 0.000); // JMU Purple
-		glBegin(GL_LINES);
-		glVertex2f(xStart, yStart);
-		glVertex2f(xEnd, yStart);
-		glVertex2f(xStart, yStart);
-		glVertex2f(xStart, yEnd);
-		glEnd();
-		glBegin(GL_POINTS);
-		for (size_t i = 0; i < data.size(); ++i) {
-			double x = xStart + i * xLen / data.size();
-			double y = yStart + yLen * data[i] / maxValue;
-			//assert(data[i] <= maxValue);
-			glVertex2f(x, y);
-		}
-		glEnd();
-		glFlush();
-	}
-};
+
+#include "common.h"
 class UFPerformancePloter {
 	Tester tester;
 	PerformancePloter p;
@@ -620,7 +552,7 @@ public:
 		glutCreateWindow("Test");
 		glutDisplayFunc(display);
 		glutKeyboardFunc(keyboard);
-		openGLInit();
+		PerformancePloter::openGLInit();
 		glutMainLoop();
 		return 0;
 	}
@@ -694,8 +626,7 @@ class ErdosRenyi {
 		glBegin(GL_LINE_STRIP);
 		for (size_t i = 0; i < counts.size(); ++i) {
 			double x = xStart + xLen * (i + 1) / counts.size();
-			double y = yStart
-					+ yLen * (i + 1)  * (i + 1) / (2 * maxValue);
+			double y = yStart + yLen * (i + 1) * (i + 1) / (2 * maxValue);
 			glVertex2f(x, y);
 		}
 		glEnd();
@@ -747,34 +678,38 @@ public:
 ErdosRenyi* ErdosRenyi::instance = NULL;
 }
 
-class PseudoRand{
+class PseudoRand {
 	unsigned int multiplier;
 	unsigned int modulus;
 	unsigned int shift;
 	unsigned int current;
 public:
-	PseudoRand(unsigned int multiplier,unsigned int modulus,unsigned int shift, unsigned int seed = 0){
+	PseudoRand(unsigned int multiplier, unsigned int modulus,
+			unsigned int shift, unsigned int seed = 0) {
 		this->multiplier = (multiplier % modulus);
 		this->shift = (shift % modulus);
 		this->modulus = modulus;
 		this->current = seed;
 	}
-	unsigned int next(){
-		current = ((unsigned long long)multiplier * (unsigned long long)current + (unsigned long long)shift) % (unsigned long long)modulus;
+	unsigned int next() {
+		current = ((unsigned long long) multiplier
+				* (unsigned long long) current + (unsigned long long) shift)
+				% (unsigned long long) modulus;
 		return current;
 	}
 };
-unsigned int myRand(){
+unsigned int myRand() {
 	static PseudoRand rand(16807, (((unsigned int) 1) << 31) - 1, 1);
 	return rand.next();
 }
 
-unsigned int generateAllConnectionsInGrid(unsigned int m, unsigned int n, unsigned int *result){
-	unsigned int k  = 0;
+unsigned int generateAllConnectionsInGrid(unsigned int m, unsigned int n,
+		unsigned int *result) {
+	unsigned int k = 0;
 	unsigned int index;
 
-	for(unsigned int i = 0;i < m - 1;++ i){
-		for(unsigned int j = 0;j < n - 1;++ j){
+	for (unsigned int i = 0; i < m - 1; ++i) {
+		for (unsigned int j = 0; j < n - 1; ++j) {
 			index = i * m + j;
 			result[k] = index;
 			result[k + 1] = index + 1;
@@ -790,56 +725,59 @@ unsigned int generateAllConnectionsInGrid(unsigned int m, unsigned int n, unsign
 	}
 
 	index = (m - 1) * n;
-	for(unsigned int i = 0;i < n - 1;++ i, ++index){
+	for (unsigned int i = 0; i < n - 1; ++i, ++index) {
 		result[k] = index;
 		result[k] = index + 1;
 		k += 2;
 	}
 	return k / 2;
 }
-void randSwapSitesInOneConnection(unsigned int k, unsigned int *result){
+void randSwapSitesInOneConnection(unsigned int k, unsigned int *result) {
 	k *= 2;
-	for(unsigned int i = 0;i < k;i += 2){
-			if(myRand() % 2 == 0){
-				swap(result[i], result[i + 1]);
-			}
+	for (unsigned int i = 0; i < k; i += 2) {
+		if (myRand() % 2 == 0) {
+			swap(result[i], result[i + 1]);
+		}
 	}
 }
-void randPermuteGirdConnections(unsigned int k, unsigned int *result){
+void randPermuteGirdConnections(unsigned int k, unsigned int *result) {
 	k *= 2;
-	for(unsigned int i = 0;i < k;i += 2){
+	for (unsigned int i = 0; i < k; i += 2) {
 		unsigned int index = i + (rand() % ((k - i) / 2)) * 2;
-		if(index != i){
+		if (index != i) {
 			swap(result[i], result[index]);
 			swap(result[i + 1], result[index + 1]);
 		}
 	}
 }
 template<class T>
-void doublingTestForRandGrid(unsigned int start, unsigned int end, unsigned int t){
+void doublingTestForRandGrid(unsigned int start, unsigned int end,
+		unsigned int t) {
 	clock_t last = 0;
 	bool isFirst = true;
-	while(start < end){
+	while (start < end) {
 		unsigned int count = 0;
 		unsigned int siteCount = start * start;
 		vector<unsigned int> connections(4 * start * (start - 1), 0);
 		T uf(siteCount);
 		double duration = 0.0;
-		unsigned int k = generateAllConnectionsInGrid(start, start, &connections[0]);
+		unsigned int k = generateAllConnectionsInGrid(start, start,
+				&connections[0]);
 
 		assert(k == 2 * start * (start - 1));
 		randSwapSitesInOneConnection(k, &connections[0]);
 		cout << "grid is " << start << " X " << start << endl;
-		for(unsigned int i = 0;i < t;++ i){
+		for (unsigned int i = 0; i < t; ++i) {
 			randPermuteGirdConnections(k, &connections[0]);
-			clock_t begin  = clock();
-			for(unsigned int i = 0;i < k;++ i)
+			clock_t begin = clock();
+			for (unsigned int i = 0; i < k; ++i)
 				uf(connections[2 * i], connections[2 * i + 1]);
 			duration += (clock() - begin);
 		}
-		cout << start << count << ", duration : " << (duration / (double)t / (double)CLOCKS_PER_SEC);
-		if(!isFirst){
-			cout << ", ratio : " << (duration / (double)last);
+		cout << start << count << ", duration : "
+				<< (duration / (double) t / (double) CLOCKS_PER_SEC);
+		if (!isFirst) {
+			cout << ", ratio : " << (duration / (double) last);
 		}
 		cout << endl;
 		isFirst = false;
@@ -848,13 +786,13 @@ void doublingTestForRandGrid(unsigned int start, unsigned int end, unsigned int 
 	}
 }
 template<class T>
-void doublingTest(unsigned int start, unsigned int end){
+void doublingTestForUF(unsigned int start, unsigned int end) {
 	clock_t last = 0;
 	bool isFirst = true;
-	while(start < end){
+	while (start < end) {
 		unsigned int count = 0;
 		T uf(start);
-		clock_t begin  = clock();
+		clock_t begin = clock();
 		while (uf.count() > 1) {
 			unsigned int val1 = myRand() % start;
 			unsigned int val2 = myRand() % start;
@@ -862,9 +800,10 @@ void doublingTest(unsigned int start, unsigned int end){
 			++count;
 		}
 		clock_t duration = clock() - begin;
-		cout << "number of site : " << start << ", pairs generated : " << count << ", duration : " << (duration / (double)CLOCKS_PER_SEC);
-		if(!isFirst){
-			cout << ", ratio : " << (duration / (double)last);
+		cout << "number of site : " << start << ", pairs generated : " << count
+				<< ", duration : " << (duration / (double) CLOCKS_PER_SEC);
+		if (!isFirst) {
+			cout << ", ratio : " << (duration / (double) last);
 		}
 		cout << endl;
 		isFirst = false;
@@ -873,64 +812,70 @@ void doublingTest(unsigned int start, unsigned int end){
 	}
 }
 template<class T>
-class UFWrapper{
+class UFWrapper {
 protected:
 	T uf;
 public:
-	UFWrapper(unsigned int n) : uf(n){
+	UFWrapper(unsigned int n) :
+			uf(n) {
 	}
-	unsigned int count(){
+	unsigned int count() {
 		return uf.count();
 	}
-	void operator()(unsigned int p, unsigned int q ){
+	void operator()(unsigned int p, unsigned int q) {
 		uf.connect(p, q);
 	}
-	bool connected(unsigned int p, unsigned int q){
+	bool connected(unsigned int p, unsigned int q) {
 		return uf.connected(p, q);
 	}
-	void reset(){
+	void reset() {
 		uf.reset();
 	}
 };
 template<class T>
-class UFCompressedWrapper : public UFWrapper<T>{
+class UFCompressedWrapper: public UFWrapper<T> {
 public:
-	UFCompressedWrapper(unsigned int n) : UFWrapper<T>(n){
-		}
-	void operator()(unsigned int p, unsigned int q ){
+	UFCompressedWrapper(unsigned int n) :
+			UFWrapper<T>(n) {
+	}
+	void operator()(unsigned int p, unsigned int q) {
 		(UFWrapper<T>::uf).uniteWithCompress(p, q);
 	}
 };
-int runTest(unsigned int argc, char *argv[]){
+int runTest(unsigned int argc, char *argv[]) {
 	unsigned int start = 2, end = (1 << 20);
 
 	cout << "doubling test for weighted quick union : " << endl;
-	doublingTest<UFWrapper<WeightedQuickUnionUF> >(start, end);
+	doublingTestForUF<UFWrapper<WeightedQuickUnionUF> >(start, end);
 
-	cout << "doubling test for weighted quick union with path compression : " << endl;
-	doublingTest<UFCompressedWrapper<WeightedQuickUnionUF> >(start, end);
+	cout << "doubling test for weighted quick union with path compression : "
+			<< endl;
+	doublingTestForUF<UFCompressedWrapper<WeightedQuickUnionUF> >(start, end);
 
 	cout << "doubling test for weighted quick union by height : " << endl;
-	doublingTest<UFWrapper<WeightedByHeightQuickUnionUF> >(start, end);
+	doublingTestForUF<UFWrapper<WeightedByHeightQuickUnionUF> >(start, end);
 
-	cout << "doubling test for weighted quick union by height with path compression : " << endl;
-	doublingTest<UFCompressedWrapper<WeightedByHeightQuickUnionUF> >(start, end);
+	cout
+			<< "doubling test for weighted quick union by height with path compression : "
+			<< endl;
+	doublingTestForUF<UFCompressedWrapper<WeightedByHeightQuickUnionUF> >(start,
+			end);
 
 	cout << "doubling test for quick union with compression : " << endl;
-	doublingTest<UFCompressedWrapper<QuickUnionUF> >(start, end);
+	doublingTestForUF<UFCompressedWrapper<QuickUnionUF> >(start, end);
 
 	cout << "doubling test for quick union : " << endl;
-	doublingTest<UFWrapper<QuickUnionUF> >(start, end);
+	doublingTestForUF<UFWrapper<QuickUnionUF> >(start, end);
 
 	cout << "doubling test for quick find :" << endl;
-	doublingTest<UFWrapper<QuickFindUF> >(start, end);
+	doublingTestForUF<UFWrapper<QuickFindUF> >(start, end);
 
 	return 0;
 }
 template<class T1, class T2>
-void compareTwo(unsigned int n, unsigned int trials){
+void compareTwo(unsigned int n, unsigned int trials) {
 
-	for(unsigned int i = 0;i < trials; ++ i){
+	for (unsigned int i = 0; i < trials; ++i) {
 		T1 t1(n);
 		T2 t2(n);
 		std::vector<unsigned int> pairs;
@@ -950,23 +895,24 @@ void compareTwo(unsigned int n, unsigned int trials){
 		double duration1 = 0;
 		double duration2 = 0;
 
-		for(size_t i = 0;i < count;i += 2){
+		for (size_t i = 0; i < count; i += 2) {
 			t1(connections[i], connections[i + 1]);
 		}
-		duration1 = (clock() - start) / (double)CLOCKS_PER_SEC;
+		duration1 = (clock() - start) / (double) CLOCKS_PER_SEC;
 
 		start = clock();
-		for(size_t i = 0;i < count;i += 2){
+		for (size_t i = 0; i < count; i += 2) {
 			t2(connections[i], connections[i + 1]);
 		}
-		duration2 = (clock() - start) / (double)CLOCKS_PER_SEC;
+		duration2 = (clock() - start) / (double) CLOCKS_PER_SEC;
 
 		cout << "time consumed by algorithm 1 : " << duration1 << " s" << endl;
 		cout << "time consumed by algorithm 2 : " << duration2 << " s" << endl;
-		cout << "ratio of the two algorithm(1/2) : " << (duration1 / duration2) << endl << endl;
+		cout << "ratio of the two algorithm(1/2) : " << (duration1 / duration2)
+				<< endl << endl;
 	}
 }
-int runCompareTest(int argc, char *argv[]){
+int runCompareTest(int argc, char *argv[]) {
 	//compareTwo<UFWrapper<QuickFindUF>,  UFWrapper<QuickUnionUF> >(10000, 10);
 	unsigned int start = 2;
 	unsigned int end = 512;
@@ -982,26 +928,26 @@ int runCompareTest(int argc, char *argv[]){
 	return 0;
 }
 template<class T>
-class RandomGridAnimate{
-	vector<unsigned int > processedConnections;
+class RandomGridAnimate {
+	vector<unsigned int> processedConnections;
 	vector<unsigned int> connections;
 	unsigned int current;
 	unsigned int m, n;
 	T uf;
-	static void display(){
+	static void display() {
 		instance->show();
 	}
-	static void timer(int value){
+	static void timer(int value) {
 		instance->alarm(value);
 	}
-	static void keyboard(unsigned char ch, int x, int y){
-		if(ch == 'r'){
+	static void keyboard(unsigned char ch, int x, int y) {
+		if (ch == 'r') {
 			instance->reset();
 			glutPostRedisplay();
 		}
 	}
 public:
-	void show(){
+	void show() {
 		double xStart = -0.95;
 		double yStart = -0.95;
 		double xEnd = 0.95;
@@ -1013,75 +959,82 @@ public:
 		glColor3f(1.0, 0.0, 0.000);
 		glPointSize(2.0);
 		glBegin(GL_POINTS);
-			for (unsigned int i = 0; i < m; ++i) {
-				double y = yStart + i / (double) (m - 1) * yLen;
-				for(unsigned int j = 0;j < n;++ j){
-					double x = xStart + j / (double)(n - 1) * xLen;
-					glVertex2f(x, y);
-				}
+		for (unsigned int i = 0; i < m; ++i) {
+			double y = yStart + i / (double) (m - 1) * yLen;
+			for (unsigned int j = 0; j < n; ++j) {
+				double x = xStart + j / (double) (n - 1) * xLen;
+				glVertex2f(x, y);
 			}
+		}
 		glEnd();
 		glBegin(GL_LINES);
 		glColor3f(0.0, 1.0, 0.0);
-		for(size_t i = 0;i < processedConnections.size();i += 2){
-			double x1 = xStart + processedConnections[i] % n / (double)(n - 1) * xLen;
-			double y1 = yStart + processedConnections[i] / n / (double)(m - 1) * yLen;
-			double x2 = xStart + processedConnections[i + 1] % n / (double)(n - 1) * xLen;
-			double y2 = yStart + processedConnections[i + 1] / n / (double)(m - 1) * yLen;
+		for (size_t i = 0; i < processedConnections.size(); i += 2) {
+			double x1 = xStart
+					+ processedConnections[i] % n / (double) (n - 1) * xLen;
+			double y1 = yStart
+					+ processedConnections[i] / n / (double) (m - 1) * yLen;
+			double x2 = xStart
+					+ processedConnections[i + 1] % n / (double) (n - 1) * xLen;
+			double y2 = yStart
+					+ processedConnections[i + 1] / n / (double) (m - 1) * yLen;
 			glVertex2f(x1, y1);
 			glVertex2f(x2, y2);
 		}
 		glEnd();
-		if(uf.count() <= 1){
+		if (uf.count() <= 1) {
 			std::ostringstream os;
-			os << "connections processed : " << current << ", ratio : " << (current / (double)connections.size());
-			PerformancePloter::drawString(-0.9, - 0.9, os.str());
+			os << "connections processed : " << current << ", ratio : "
+					<< (current / (double) connections.size());
+			PerformancePloter::drawString(-0.9, -0.9, os.str());
 		}
 		glFlush();
 	}
-	unsigned int next(){
+	unsigned int next() {
 		//unsigned int total = m * (n - 1) + n * (m - 1);
 		//return myRand() % total;
-		return connections[(current ++ ) % connections.size()];
+		return connections[(current++) % connections.size()];
 	}
-	void alarm(int value){
-		if(uf.count() > 1){
+	void alarm(int value) {
+		if (uf.count() > 1) {
 			glutTimerFunc(interval, timer, value);
 			unsigned int index = next();
 			unsigned int s1 = 0, s2 = 0;
-			if(index >= m * (n - 1)){
+			if (index >= m * (n - 1)) {
 				index -= m * (n - 1);
 				int r = index % (m - 1);
 				int c = index / (m - 1);
 				s1 = r * n + c;
 				s2 = s1 + n;
-			}else{
+			} else {
 				int r = index / (n - 1);
 				int c = index % (n - 1);
 				s1 = r * n + c;
 				s2 = s1 + 1;
 			}
-			if(!uf.connected(s1, s2)){
+			if (!uf.connected(s1, s2)) {
 				uf(s1, s2);
 				processedConnections.push_back(s1);
 				processedConnections.push_back(s2);
-				cout << "(" << (s1 / n) << ',' << (s1 % n) << ")\t (" << (s2 / n) << ',' << (s2 % n) << ")" << endl;
+				cout << "(" << (s1 / n) << ',' << (s1 % n) << ")\t ("
+						<< (s2 / n) << ',' << (s2 % n) << ")" << endl;
 			}
 			glutPostRedisplay();
 		}
 	}
-	RandomGridAnimate(unsigned int m, unsigned int n) : m(m), n(n), uf(m * n){
+	RandomGridAnimate(unsigned int m, unsigned int n) :
+			m(m), n(n), uf(m * n) {
 		instance = this;
 		reset();
 	}
-	void reset(){
+	void reset() {
 		current = 0;
 		connections.clear();
 		processedConnections.clear();
 		uf.reset();
 
 		unsigned int total = m * (n - 1) + n * (m - 1);
-		for(unsigned int i = 0;i < total;++ i)
+		for (unsigned int i = 0; i < total; ++i)
 			connections.push_back(i);
 		std::random_shuffle(connections.begin(), connections.end());
 		glutTimerFunc(interval, timer, 1000);
@@ -1095,7 +1048,7 @@ public:
 		glutDisplayFunc(display);
 		glutTimerFunc(interval, timer, 1000);
 		glutKeyboardFunc(keyboard);
-		openGLInit();
+		PerformancePloter::openGLInit();
 		glutMainLoop();
 		return 0;
 	}
@@ -1105,10 +1058,10 @@ public:
 template<class T>
 RandomGridAnimate<T>* RandomGridAnimate<T>::instance = NULL;
 /*int main(int argc, char *argv[]) {
-	//UFPerformancePloter ploter;
-	 //return ploter.run(argc, argv);
-	//ErdosRenyi erdosRenyi(10000);
-	//erdosRenyi.run(argc, argv);
-	//RandomGridAnimate<UFWrapper<QuickFindUF> > instance(15, 15);
-	//return instance.run(argc, argv);
-}*/
+ //UFPerformancePloter ploter;
+ //return ploter.run(argc, argv);
+ //ErdosRenyi erdosRenyi(10000);
+ //erdosRenyi.run(argc, argv);
+ //RandomGridAnimate<UFWrapper<QuickFindUF> > instance(15, 15);
+ //return instance.run(argc, argv);
+ }*/
