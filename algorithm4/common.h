@@ -49,7 +49,26 @@ public:
 		glEnd();
 	}
 	template<class T>
-	void display(const char *title, const std::vector<T>& data) {
+	static void plotPoints(const char *title, const std::vector<T>& data, double maxValue, size_t count){
+		double xStart = -0.95;
+		double yStart = -0.95;
+		double xEnd = 0.95;
+		double yEnd = 0.95;
+		double xLen = xEnd - xStart;
+		double yLen = yEnd - yStart;
+		if(title != NULL)
+			drawString(-0.8, 0.8, title, maxValue);
+		glBegin(GL_POINTS);
+			for (size_t i = 0; i < count; ++i) {
+				double x = xStart + i * xLen / data.size();
+				double y = yStart + yLen * data[i] / maxValue;
+				//assert(data[i] <= maxValue);
+				glVertex2f(x, y);
+			}
+		glEnd();
+	}
+	template<class T>
+	static void display(const char *title, const std::vector<T>& data) {
 		double xStart = -0.95;
 		double yStart = -0.95;
 		double xEnd = 0.95;
