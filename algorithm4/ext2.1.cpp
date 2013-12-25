@@ -23,6 +23,7 @@
 #include <cassert>
 #include <condition_variable>
 #include <chrono>
+#include <tuple>
 #include "common.h"
 using namespace std;
 /**
@@ -141,6 +142,80 @@ void shellSort(T a, unsigned int n, U increments, unsigned int m,
 		}
 	}
 }
+
+/**
+ * merge two sorted array into one sorted array
+ *
+ * @param ar1 One of the arrays to be merged
+ * @param n1 Number of elements in array {@code ar1}
+ * @param ar2 The other array to be merged
+ * @param n2 Number of elements in array {@code ar2}
+ * @param output The merged sorted array.
+ * @param comparator The "less than" relation between every two element.
+ */
+template<class T, class U = T, class Comparator>
+void merge(T ar1, unsigned int n1, T ar2, unsigned int n2, U output, Comparator comparator){
+	decltype(n1) i = 0;
+	decltype(n2) j = 0;
+	auto count = n1 + n2;
+	decltype(count) k = 0;
+	while(i < n1 && j < n2){
+		if(comparator(ar2[j], ar1[i])){
+			output[k] = ar2[j];
+			++ j;
+		}else{
+			output[k] = ar1[i];
+			++ i;
+		}
+		++ k;
+	}
+	while(i < n1)
+		output[k ++] = ar1[i ++ ];
+	while(j < n2)
+		output[k ++] = ar2[j ++ ];
+
+}
+
+template<class T, bool optimize, class U = T, class Comparator>
+void mergeSort(T ar, unsigned int n, U output, Comparator comparator){
+	if(n <= 1)
+		return;
+	if(optimize && n <= 20){
+		insertionSort(ar, n, comparator);
+		return ;
+	}
+	decltype(n) n1 = n / 2;
+	decltype(n) n2 = n - n1;
+	T ar2 = ar + n1;
+	mergeSort(ar, n1, output, comparator);
+	mergeSort(ar2, n2, output, comparator);
+	if(optimize && comparator(ar[n1], ar[n1 - 1])){
+		for(decltype(n) i = 0;i < n;++ i)
+			ar[i] = output[i];
+		return;
+	}
+
+	merge(output, n1, output, n2, ar, comparator);
+}
+template<class T, class U = T, class Comparator>
+void bottomUpMergeSort(T ar, unsigned int n, U output, Comparator comparator){
+	bool isArSorted = true;
+	for(unsigned int sz = 1;sz < n;sz += sz){
+		unsigned int cnt = sz + sz;
+		unsigned int j = sz;
+		while(j < n){
+			merge(ar + (j - cnt), sz, ar + (j - sz), sz, output, comparator);
+			j += cnt;
+		}
+		merge(ar + (j - cnt), sz, ar + (j - sz), n - j + sz, output, comparator);
+		std::swap(ar, output);
+		isArSorted = (!isArSorted);
+	}
+	if(!isArSorted){
+		for(decltype(n) i = 0;i < n;++ i)
+			ar[i] = output[i];
+	}
+}
 /**
  * This class is for calculate the array accesses in each iteration of one increment
  */
@@ -199,7 +274,7 @@ class InsertionSortAndSelectionSortAnimation {
 			friend void swap(UInt va, UInt vb) {
 				if (&va != &vb) {
 					if (!va.signalData->done) {
-						std::unique_lock<std::mutex> lk(va.signalData->m);
+						std::unique_lock < std::mutex > lk(va.signalData->m);
 						va.signalData->cv.wait(lk,
 								[va] {return va.signalData->isReady;});
 						va.signalData->isReady = false;
@@ -287,12 +362,12 @@ class InsertionSortAndSelectionSortAnimation {
 		instance->signalData.done = true;
 	}
 	void notify() {
-		std::lock_guard<std::mutex> lk(signalData.m);
+		std::lock_guard < std::mutex > lk(signalData.m);
 		signalData.cv.notify_one();
 		signalData.isReady = true;
 	}
 	void done() {
-		std::lock_guard<std::mutex> lk(signalData.m);
+		std::lock_guard < std::mutex > lk(signalData.m);
 		signalData.cv.notify_one();
 		signalData.isReady = true;
 		signalData.done = true;
@@ -335,7 +410,7 @@ public:
 	static thread_local InsertionSortAndSelectionSortAnimation *instance;
 };
 thread_local InsertionSortAndSelectionSortAnimation *InsertionSortAndSelectionSortAnimation::instance =
-NULL;
+		NULL;
 class ShellSortTraces {
 	vector<vector<unsigned int>> traces;
 	unsigned int maxValue;
@@ -557,13 +632,14 @@ int testForSortingZeroOneArray(int argc, char *argv[]) {
 	return 0;
 }
 template<int N, class T = double>
-struct TTuple{
+struct TTuple {
 	static_assert(N > 0, "N should be greater than zero");
 	T values[N];
 	static const int size = N;
 	typedef T type;
-	template <typename... U>
-	TTuple(U ... vals) : values{vals...}{
+	template<typename ... U>
+	TTuple(U ... vals) :
+			values { vals... } {
 
 	}
 };
@@ -574,7 +650,7 @@ class RunningTimePlotter {
 	bool isDone = false;
 	T val;
 	vector<vector<double>> values;
-	vector<unsigned int > counts;
+	vector<unsigned int> counts;
 	TTuple<3 * N> colors;
 	static void display() {
 		instance->show();
@@ -590,8 +666,8 @@ class RunningTimePlotter {
 		while (!isDone) {
 			TTuple<N> tmp = val();
 			{
-				std::lock_guard<std::mutex> lk(m);
-				for(size_t i = 0;i < values.size();++ i){
+				std::lock_guard < std::mutex > lk(m);
+				for (size_t i = 0; i < values.size(); ++i) {
 					vector<double>& v = values[i];
 					unsigned int& count = counts[i];
 					if (count == v.size()) {
@@ -608,12 +684,12 @@ class RunningTimePlotter {
 			std::this_thread::sleep_for(dura);
 		}
 	}
-	double getMaxValue(){
+	double getMaxValue() {
 		double maxValue = 0.0;
-		for(size_t i = 0;i < values.size();++ i){
+		for (size_t i = 0; i < values.size(); ++i) {
 			vector<double>& v = values[i];
-			maxValue = std::max(maxValue, *std::max_element(v.begin(),
-										v.end()));
+			maxValue = std::max(maxValue,
+					*std::max_element(v.begin(), v.end()));
 		}
 		if (maxValue == 0.0)
 			maxValue = 1.0;
@@ -624,7 +700,7 @@ public:
 			val(t), colors(colors) {
 		instance = this;
 		values.resize(N);
-		for(size_t i = 0;i < N;++ i){
+		for (size_t i = 0; i < N; ++i) {
 			values[i].resize(1000);
 			counts.push_back(0);
 		}
@@ -633,10 +709,10 @@ public:
 	void show() {
 		glClear(GL_COLOR_BUFFER_BIT);
 		{
-			std::lock_guard<std::mutex> lk(m);
+			std::lock_guard < std::mutex > lk(m);
 			double maxValue = getMaxValue();
 			glPointSize(3.0);
-			for(size_t i = 0;i < values.size();++ i){
+			for (size_t i = 0; i < values.size(); ++i) {
 				vector<double>& v = values[i];
 				glColor3dv(colors.values + 3 * i);
 				PerformancePloter::plotPoints(NULL, v, maxValue, counts[i]);
@@ -655,7 +731,7 @@ public:
 		glutDisplayFunc(display);
 		glutTimerFunc(interval, timer, 1000);
 		PerformancePloter::openGLInit();
-		for(size_t i = 0;i < counts.size();++ i)
+		for (size_t i = 0; i < counts.size(); ++i)
 			counts[i] = 0;
 		isDone = false;
 		workingThread = std::thread(func, this);
@@ -678,37 +754,39 @@ public:
 	TTuple<2> operator()() {
 		vector<unsigned int> values;
 		randUInts(values, start, start * 2);
+		double ratio = 200000.0;
 		clock_t begin = clock();
 		switch (method) {
 		case 0:
 			insertionSort(values, (unsigned int) (values.size()),
 					std::less<unsigned int>());
 			start += step;
-			return {clock() - begin, (start - step) * (start - step) / 120.0};
+			return {(double)(clock() - begin), (start - step) * (start - step) / ratio};
 			break;
 		case 1:
 			selectionSort(values, (unsigned int) (values.size()),
 					std::less<unsigned int>());
 			start += step;
-			return {clock() - begin, (start - step) * (start - step) / 120.0};
+			return {(double)(clock() - begin), (start - step) * (start - step) / ratio};
 			break;
 		case 2:
 			shellSort(values, (unsigned int) (values.size()),
 					std::less<unsigned int>());
 			start += step;
-			return {clock() - begin, (start - step) * std::pow(start - step, 1 / 2.0) / 120.0};
+			return {(double)(clock() - begin), (start - step) * std::pow(start - step, 1 / 2.0) / ratio};
 			break;
 		}
-		return {0, 0};
+		return {0.0, 0.0};
 	}
 };
-class ArmortizedCost{
+class ArmortizedCost {
 	unsigned int problemSize = 1000;
-	unsigned int  counts = 0;
+	unsigned int counts = 0;
 	unsigned long long totalTime = 0;
 	unsigned int method;
 public:
-	ArmortizedCost( unsigned int method = 0, unsigned int problemSize = 1000) : problemSize(problemSize), method(method){
+	ArmortizedCost(unsigned int method = 0, unsigned int problemSize = 1000) :
+			problemSize(problemSize), method(method) {
 
 	}
 	TTuple<2> operator()() {
@@ -732,67 +810,277 @@ public:
 		clock_t duration = clock() - begin;
 		totalTime += duration;
 		++counts;
-		return {duration, totalTime / (double)counts};
+		return {(double)duration, totalTime / (double)counts};
 	}
 };
-
-class ShellSortIncrementCompare{
-	//formed by merging together the se	quences "9* (4 ^ k) - 9 * (2 ^ k) + 1" and "(4 ^ k - 3 * (2 ^ k) + 1"
-	TTuple<11, unsigned int> i1{1, 5, 19, 41, 109, 209, 505, 929, 2161, 3905, 8929,};
-	//formed from the sequence "(3 ^ k - 1) / 2"
-	TTuple<11, unsigned int> i2{1, 4, 13, 40, 121, 364, 1093, 3280, 9841, };
-	//formed from the sequence "(2^(k - 1))"
-	TTuple<11, unsigned int> i3{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024,};
+class CompareDistributions {
 	unsigned int start = 100;
-	template<class U>
-	void reverse(U& u){
-		for(unsigned int i = 0, j = U::size - 1;i < j;++ i, --j)
-			swap(u.values[i], u.values[j]);
+	unsigned int method = 0;
+	unsigned int distribution = 0;
+public:
+	CompareDistributions(unsigned int method) : method(method){
+	}
+	template<class Func>
+	TTuple<4> testOne(Func func) {
+		TTuple<4> result;
+		if(func != nullptr){
+			unsigned int values[start];
+			unsigned long long counter = 0;
+			AccessCountedArray<unsigned int, unsigned long long *> ar(values,
+					&counter);
+			std::default_random_engine rd;
+			std::uniform_int_distribution<unsigned int> discrete(0, 2 * start);
+			std::poisson_distribution<unsigned int> poisson(start);
+			std::geometric_distribution<unsigned int> geometric(1 / log(start));
+			std::normal_distribution<double> normal(start, start * 0.01);
+
+			std::generate(values, values + start, [&] {return discrete(rd);});
+			func(ar, start, std::less<unsigned int>());
+			result.values[0] = counter;
+
+			counter = 0;
+			std::generate(values, values + start, [&] {return poisson(rd);});
+			func(ar, start, std::less<unsigned int>());
+			result.values[1] = counter;
+
+			counter = 0;
+			std::generate(values, values + start, [&] {return geometric(rd);});
+			func(ar, start, std::less<unsigned int>());
+			result.values[2] = counter;
+
+			counter = 0;
+			std::generate(values, values + start, [&] {return (unsigned int)normal(rd);});
+			func(ar, start, std::less<unsigned int>());
+			result.values[3] = counter;
+		}
+		return result;
 	}
 public:
-	ShellSortIncrementCompare(){
-		reverse(i1);
-		reverse(i2);
-		reverse(i3);
+
+	TTuple<4> operator()() {
+		void (*func)(AccessCountedArray<unsigned int, unsigned long long *>,
+				unsigned int, std::less<unsigned int>) = nullptr;
+		switch (method) {
+		 case 0:
+			 func = selectionSort;break;
+		 case 1:
+			 func = insertionSort;break;
+		 case 2:
+			 func = shellSort;break;
+		 }
+		 start += 10;
+		return testOne(func);
 	}
+};
+class SpecialDistributions {
+	unsigned int start = 100;
+	unsigned int method = 0;
+	unsigned int distribution = 0;
+public:
+	SpecialDistributions(unsigned int method = 0) : method(method){
+	}
+	static void generate0(unsigned int *values, unsigned int count){
+		for(unsigned int i = 0;i < count;++ i)
+			values[i] = (i % 2);
+		std::random_shuffle(values, values + count);
+	}
+	static void generate1(unsigned int *values, unsigned int count){
+		for(unsigned int i = 0;i < count / 2;++ i)
+			values[i] = 0;
+		randUInts(values + count / 2, values + count, count);
+		std::random_shuffle(values, values + count);
+	}
+	static void generate2(unsigned int *values, unsigned int count){
+		unsigned int i = 0;
+		unsigned int *p = values;
+		unsigned int n  = count;
+		while(count != 1){
+			unsigned int tmp = count / 2;
+			for(unsigned int j = 0;j < tmp;++ j)
+				values[j] = i;
+			values += tmp;
+			count -= tmp;
+			++ i;
+		}
+		*values = i;
+		std::random_shuffle(p, p + n);
+	}
+	template<class Func>
+	TTuple<3> testOne(Func func) {
+		TTuple<3> result;
+		if(func != nullptr){
+			unsigned int values[start];
+			unsigned long long counter = 0;
+			AccessCountedArray<unsigned int, unsigned long long *> ar(values,
+					&counter);
+
+			generate0(values, start);
+			func(ar, start, std::less<unsigned int>());
+			result.values[0] = counter;
+
+			counter = 0;
+			generate1(values, start);
+			func(ar, start, std::less<unsigned int>());
+			result.values[1] = counter;
+
+			counter = 0;
+			generate2(values, start);
+			func(ar, start, std::less<unsigned int>());
+			result.values[2] = counter;
+		}
+		return result;
+	}
+public:
+
 	TTuple<3> operator()() {
+		void (*func)(AccessCountedArray<unsigned int, unsigned long long *>,
+				unsigned int, std::less<unsigned int>) = nullptr;
+		switch (method) {
+		 case 0:
+			 func = selectionSort;break;
+		 case 1:
+			 func = insertionSort;break;
+		 case 2:
+			 func = shellSort;break;
+		 }
+		 start += 10;
+		return testOne(func);
+	}
+};
+template<int N>
+class ShellSortIncrementCompare {
+	unsigned int start = 100;
+public:
+	typedef std::vector<vector<unsigned int>> Increments;
+	ShellSortIncrementCompare(const Increments& increments) :
+			increments(increments) {
+		for (size_t i = 0; i < increments.size(); ++i) {
+			vector<unsigned int>& vals = this->increments[i];
+			std::sort(vals.begin(), vals.end(), std::greater<unsigned int>());
+			for (int j = 0; j < vals.size(); ++j)
+				cout << vals[j] << ' ';
+			cout << endl;
+		}
+	}
+	TTuple<N> operator()() {
 		unsigned int origin[start];
 		unsigned int toBeSorted[start];
-		clock_t duration1 = 0, duration2 = 0, duration3 = 0;
+		clock_t duration = 0;
 		randUInts(origin, origin + start, start * 2);
 		unsigned long long counter = 0;
-		double counter1 = 0, counter2 = 0, counter3 = 0;
-		AccessCountedArray<unsigned int, unsigned long long *> ar(toBeSorted, &counter);
-
-		std::copy(origin, origin + start, toBeSorted);
-		counter = 0;
-		duration1 = clock();
-		shellSort(ar, start, i1.values, i1.size, less<unsigned int>());
-		duration1 = clock() - duration1;
-		std::copy(origin, origin + start, toBeSorted);
-		counter1 = counter;
-		counter = 0;
-		duration2 = clock();
-		shellSort(ar, start, i2.values, i2.size, less<unsigned int>());
-		duration2 = clock() - duration2;
-		std::copy(origin, origin + start, toBeSorted);
-		counter2 = counter;
-		counter = 0;
-		duration3 = clock();
-		shellSort(ar, start, i3.values, i3.size, less<unsigned int>());
-		duration3 = clock() - duration3;
-		counter3 = counter;
+		AccessCountedArray<unsigned int, unsigned long long *> ar(toBeSorted,
+				&counter);
+		TTuple<N> result;
+		for (size_t i = 0; i < increments.size(); ++i) {
+			std::copy(origin, origin + start, toBeSorted);
+			counter = 0;
+			duration = clock();
+			shellSort(ar, start, &increments[i][0], increments[i].size(),
+					less<unsigned int>());
+			duration = clock() - duration;
+			result.values[i] = counter;
+		}
 		start += 10;
-		return {counter1, counter2, counter3};
+		return result;
+	}
+private:
+	Increments increments;
+};
+class ShellSortIncrementCompare1: public ShellSortIncrementCompare<4> {
+public:
+	typedef vector<unsigned int> Irts;
+	ShellSortIncrementCompare1() :
+			ShellSortIncrementCompare<4>(
+					{
+					//formed by merging together the se	quences "9* (4 ^ k) - 9 * (2 ^ k) + 1" and "(4 ^ k - 3 * (2 ^ k) + 1"
+							Irts { 1, 5, 19, 41, 109, 209, 505, 929, 2161, 3905,
+									8929, },
+							//formed from the sequence "(3 ^ k - 1) / 2"
+							Irts { 1, 4, 13, 40, 121, 364, 1093, 3280, 9841, },
+							//formed from the sequence "(2^(k - 1))"
+							Irts { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, },
+							//prime numbers of the form "(2^k - 1)"
+							Irts { 1, 3, 7, 31, 127, 8191, }, }) {
+	}
+};
+class ShellSortIncrementCompare2: public ShellSortIncrementCompare<12> {
+public:
+	typedef vector<unsigned int> Irts;
+	ShellSortIncrementCompare2() :
+			ShellSortIncrementCompare<12>( {
+			//formed from the sequence (2)^(k - 1))
+					Irts { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048,
+							4096, },
+					//formed from the sequence (3)^(k - 1))
+					Irts { 1, 3, 9, 27, 81, 243, 729, 2187, 6561, },
+					//formed from the sequence (4)^(k - 1))
+					Irts { 1, 4, 16, 64, 256, 1024, 4096, },
+					//formed from the sequence (5)^(k - 1))
+					Irts { 1, 5, 25, 125, 625, 3125, },
+					//formed from the sequence (6)^(k - 1))
+					Irts { 1, 6, 36, 216, 1296, 7776, },
+					//formed from the sequence (7)^(k - 1))
+					Irts { 1, 7, 49, 343, 2401, },
+					//formed from the sequence (8)^(k - 1))
+					Irts { 1, 8, 64, 512, 4096, },
+					//formed from the sequence (9)^(k - 1))
+					Irts { 1, 9, 81, 729, 6561, },
+					//formed from the sequence (10)^(k - 1))
+					Irts { 1, 10, 100, 1000, },
+					//formed from the sequence (11)^(k - 1))
+					Irts { 1, 11, 121, 1331, },
+					//formed from the sequence (12)^(k - 1))
+					Irts { 1, 12, 144, 1728, },
+					//prime numbers of the form "(2^k - 1)"
+					Irts { 1, 3, 7, 31, 127, 8191, }, }) {
+	}
+	static void output() {
+		for (unsigned int i = 2; i <= 12; ++i) {
+			cout << "//formed from the sequence (" << i << ")^(k - 1))" << endl;
+			cout << "Irts{";
+			unsigned int t = 1;
+			while (t <= 8000) {
+				cout << t << ", ";
+				t *= i;
+			}
+			cout << "}," << endl;
+		}
+
 	}
 };
 template<class T, int N>
-thread_local RunningTimePlotter<T, N> *RunningTimePlotter<T, N>::instance = nullptr;
+thread_local RunningTimePlotter<T, N> *RunningTimePlotter<T, N>::instance =
+		nullptr;
 int main(int argc, char *argv[]) {
 	//InsertionSortAndSelectionSortAnimation test;
 	//ShellSortTraces test;
-	ShellSortIncrementCompare tmp;
-	RunningTimePlotter<ShellSortIncrementCompare, 3> test(tmp, {1, 0, 0, 0, 1, 0, 1, 1, 0});
+//	ShellSortIncrementCompare1 tmp;
+//	RunningTimePlotter<ShellSortIncrementCompare1, 4> test(tmp,
+//				{
+//						1.0, 0.0, 0.0,
+//						0.0, 1.0, 0.0,
+//						1.0, 1.0, 0.0,
+//						1.0, 1.0, 1.0,
+//				});
+//	ShellSortIncrementCompare2 tmp;
+//	RunningTimePlotter<ShellSortIncrementCompare2, 12> test(tmp,
+//			{
+//					0.0, 0.0, 0.0,
+//					0.1, 0.1, 0.0,
+//					0.2, 0.2, 0.0,
+//					0.3, 0.3, 0.0,
+//					0.4, 0.4, 0.0,
+//					0.5, 0.5, 0.0,
+//					0.6, 0.6, 0.0,
+//					0.7, 0.7, 0.0,
+//					0.8, 0.8, 0.0,
+//					0.9, 0.9, 0.0,
+//					1.0, 1.0, 0.0,
+//					1.0, 0.0, 0.0,
+//			});
+	SpecialDistributions tmp(1);
+	RunningTimePlotter<SpecialDistributions, 3> test(tmp,
+			{ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0});
 	return test.run(argc, argv);
 	//return testForSortingZeroOneArrays(argc, argv);
 }
