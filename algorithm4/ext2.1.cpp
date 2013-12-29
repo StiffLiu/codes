@@ -37,7 +37,7 @@ class AccessCountedArray {
 	T *val;
 	Counter counter;
 public:
-	AccessCountedArray(T *val = NULL, Counter counter = Counter()) :
+	AccessCountedArray(T *val = nullptr, Counter counter = Counter()) :
 			val(val), counter(counter) {
 	}
 	T& operator[](unsigned int index) {
@@ -50,6 +50,9 @@ public:
 	}
 	operator const T*() {
 		return val;
+	}
+	AccessCountedArray operator+(unsigned int n) {
+		return {val + n, counter};
 	}
 	const T& operator[](unsigned int index) const {
 		if (counter != NULL)
@@ -153,68 +156,125 @@ void shellSort(T a, unsigned int n, U increments, unsigned int m,
  * @param output The merged sorted array.
  * @param comparator The "less than" relation between every two element.
  */
-template<class T, class U = T, class Comparator>
-void merge(T ar1, unsigned int n1, T ar2, unsigned int n2, U output, Comparator comparator){
+template<class T, class U, class Comparator>
+void merge(T ar1, unsigned int n1, T ar2, unsigned int n2, U output,
+		Comparator comparator) {
 	decltype(n1) i = 0;
 	decltype(n2) j = 0;
 	auto count = n1 + n2;
 	decltype(count) k = 0;
-	while(i < n1 && j < n2){
-		if(comparator(ar2[j], ar1[i])){
+	while (i < n1 && j < n2) {
+		if (comparator(ar2[j], ar1[i])) {
 			output[k] = ar2[j];
-			++ j;
-		}else{
+			++j;
+		} else {
 			output[k] = ar1[i];
-			++ i;
+			++i;
 		}
-		++ k;
+		++k;
 	}
-	while(i < n1)
-		output[k ++] = ar1[i ++ ];
-	while(j < n2)
-		output[k ++] = ar2[j ++ ];
+	while (i < n1)
+		output[k++] = ar1[i++];
+	while (j < n2)
+		output[k++] = ar2[j++];
 
 }
 
-template<class T, bool optimize, class U = T, class Comparator>
-void mergeSort(T ar, unsigned int n, U output, Comparator comparator){
-	if(n <= 1)
+template<class T, class U, class Comparator, bool optimize = true,
+		unsigned int cutoff = 10>
+void mergeSort(T ar, unsigned int n, U output, Comparator comparator) {
+	if (n <= 1)
 		return;
-	if(optimize && n <= 20){
+	if (optimize && n <= cutoff) {
 		insertionSort(ar, n, comparator);
-		return ;
+		return;
 	}
 	decltype(n) n1 = n / 2;
 	decltype(n) n2 = n - n1;
 	T ar2 = ar + n1;
 	mergeSort(ar, n1, output, comparator);
-	mergeSort(ar2, n2, output, comparator);
-	if(optimize && comparator(ar[n1], ar[n1 - 1])){
-		for(decltype(n) i = 0;i < n;++ i)
-			ar[i] = output[i];
+	mergeSort(ar2, n2, output + n1, comparator);
+	if (optimize && !comparator(ar[n1], ar[n1 - 1])) {
 		return;
 	}
 
-	merge(output, n1, output, n2, ar, comparator);
+	merge(ar, n1, ar2, n2, output, comparator);
+	for (decltype(n) i = 0; i < n; ++i)
+		ar[i] = output[i];
 }
-template<class T, class U = T, class Comparator>
-void bottomUpMergeSort(T ar, unsigned int n, U output, Comparator comparator){
+template<class T, class Comparator>
+unsigned int firstDisorderIndex(T values, unsigned int n, Comparator comparator,
+		unsigned int offset = 0) {
+	for (unsigned int i = offset + 1; i < n; ++i)
+		if (comparator(values[i], values[i - 1]))
+			return i;
+	return offset;
+}
+template<class T, class U, class Comparator>
+void bottomUpMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
 	bool isArSorted = true;
-	for(unsigned int sz = 1;sz < n;sz += sz){
+	unsigned int passes = 0;
+	for (unsigned int sz = 1; sz < n; sz += sz) {
 		unsigned int cnt = sz + sz;
-		unsigned int j = sz;
-		while(j < n){
-			merge(ar + (j - cnt), sz, ar + (j - sz), sz, output, comparator);
+		unsigned int j = 0;
+		while (j + cnt < n) {
+			merge(ar + j, sz, ar + (j + sz), sz, output + j, comparator);
 			j += cnt;
 		}
-		merge(ar + (j - cnt), sz, ar + (j - sz), n - j + sz, output, comparator);
+		if (j + sz < n) {
+			merge(ar + j, sz, ar + (j + sz), n - sz - j, output + j,
+					comparator);
+		}
 		std::swap(ar, output);
 		isArSorted = (!isArSorted);
+		++passes;
 	}
-	if(!isArSorted){
-		for(decltype(n) i = 0;i < n;++ i)
-			ar[i] = output[i];
+	if (!isArSorted) {
+		for (decltype(n) i = 0; i < n; ++i)
+			output[i] = ar[i];
 	}
+	double expected = ceil(std::log(n) / std::log(2));
+	cout << "bottom up actual passes : " << passes << ", expected passes : " << expected << ", ratio : " << passes / expected << endl;
+}
+template<class T, class U, class Comparator>
+void naturalMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
+	unsigned int last = 0;
+	unsigned int cur = 0;
+	unsigned int offset = 0;
+	unsigned int passes = 1;
+	bool isArSorted = true;
+	while ((cur = firstDisorderIndex(ar, n, comparator, last + offset))
+			!= offset) {
+		if (cur == last + offset) {
+			while (last < n) {
+				output[last] = ar[last];
+				++last;
+			}
+			std::swap(ar, output);
+			isArSorted = (!isArSorted);
+			last = 0;
+			offset = 2 * offset + 1;
+			++ passes;
+			continue;
+		}
+
+		unsigned int next = firstDisorderIndex(ar, n, comparator, cur + offset);
+		if (next == cur + offset)
+			next = n;
+		merge(ar + last, cur - last, ar + cur, next - cur, output + last,
+				comparator);
+		last = next;
+	}
+	if (!isArSorted) {
+		for (decltype(n) i = 0; i < n; ++i)
+			output[i] = ar[i];
+	}
+	double expected = ceil(std::log(n) / std::log(2));
+	cout << "natural actual passes : " << passes << ", expected passes : " << expected << ", ratio : " << passes / expected << endl;
+}
+template<class T, class Comparator>
+static bool isSorted(T values, unsigned int n, Comparator comparator) {
+	return firstDisorderIndex(values, n, comparator) == 0;
 }
 /**
  * This class is for calculate the array accesses in each iteration of one increment
@@ -274,7 +334,7 @@ class InsertionSortAndSelectionSortAnimation {
 			friend void swap(UInt va, UInt vb) {
 				if (&va != &vb) {
 					if (!va.signalData->done) {
-						std::unique_lock < std::mutex > lk(va.signalData->m);
+						std::unique_lock<std::mutex> lk(va.signalData->m);
 						va.signalData->cv.wait(lk,
 								[va] {return va.signalData->isReady;});
 						va.signalData->isReady = false;
@@ -362,12 +422,12 @@ class InsertionSortAndSelectionSortAnimation {
 		instance->signalData.done = true;
 	}
 	void notify() {
-		std::lock_guard < std::mutex > lk(signalData.m);
+		std::lock_guard<std::mutex> lk(signalData.m);
 		signalData.cv.notify_one();
 		signalData.isReady = true;
 	}
 	void done() {
-		std::lock_guard < std::mutex > lk(signalData.m);
+		std::lock_guard<std::mutex> lk(signalData.m);
 		signalData.cv.notify_one();
 		signalData.isReady = true;
 		signalData.done = true;
@@ -410,7 +470,7 @@ public:
 	static thread_local InsertionSortAndSelectionSortAnimation *instance;
 };
 thread_local InsertionSortAndSelectionSortAnimation *InsertionSortAndSelectionSortAnimation::instance =
-		NULL;
+NULL;
 class ShellSortTraces {
 	vector<vector<unsigned int>> traces;
 	unsigned int maxValue;
@@ -477,13 +537,7 @@ public:
 	static thread_local ShellSortTraces *instance;
 };
 thread_local ShellSortTraces *ShellSortTraces::instance;
-template<class T>
-static bool isSorted(T values, unsigned int n) {
-	for (unsigned int i = 1; i < n; ++i)
-		if (values[i] < values[i - 1])
-			return false;
-	return true;
-}
+
 int testShellSort(int argc, char *argv[]) {
 	unsigned int counter = 0;
 	decltype(counter) maxValue = (1 << 28);
@@ -519,7 +573,7 @@ int testShellSort(int argc, char *argv[]) {
 		cout << "average : "
 				<< countOfEachIteration.back()
 						/ ((double) start * incrementValues.size()) << endl;
-		assert(isSorted(values, start));
+		assert(isSorted(values, start, std::less<unsigned int>()));
 		delete[] values;
 	}
 	return 0;
@@ -559,6 +613,19 @@ public:
 				insertionSort(&values[i][0], (unsigned int) (values[i].size()),
 						std::less<unsigned int>());
 				break;
+			case 3: {
+				unsigned int tmpValues[values[i].size()];
+				bottomUpMergeSort(&values[i][0],
+						(unsigned int) (values[i].size()), tmpValues,
+						std::less<unsigned int>());
+				break;
+			}
+			case 4: {
+				unsigned int tmpValues[values[i].size()];
+				mergeSort(&values[i][0], (unsigned int) (values[i].size()),
+						tmpValues, std::less<unsigned int>());
+				break;
+			}
 			}
 	}
 	void add(unsigned int size, clock_t duration) {
@@ -572,7 +639,50 @@ public:
 		last = duration;
 	}
 };
+int validateSortAlgorithms(int argc, char *argv[]) {
+	const unsigned int count = 1000;
+	unsigned int values[count];
+	unsigned int toBeSorted[count];
+	unsigned int output[count];
+	unsigned int maxValue = 2 * count;
+	randUInts(values, values + count, maxValue);
+
+	copy(values, values + count, toBeSorted);
+	selectionSort(toBeSorted, count, std::less<unsigned int>());
+	assert(isSorted(toBeSorted, count, std::less<unsigned int>()));
+
+	copy(values, values + count, toBeSorted);
+	insertionSort(toBeSorted, count, std::less<unsigned int>());
+	assert(isSorted(toBeSorted, count, std::less<unsigned int>()));
+
+	copy(values, values + count, toBeSorted);
+	shellSort(toBeSorted, count, std::less<unsigned int>());
+	assert(isSorted(toBeSorted, count, std::less<unsigned int>()));
+
+	copy(values, values + count, toBeSorted);
+	bottomUpMergeSort(toBeSorted, count, output, std::less<unsigned int>());
+	assert(isSorted(toBeSorted, count, std::less<unsigned int>()));
+
+	copy(values, values + count, toBeSorted);
+	mergeSort(toBeSorted, count, output, std::less<unsigned int>());
+	assert(isSorted(toBeSorted, count, std::less<unsigned int>()));
+
+	copy(values, values + count, toBeSorted);
+	naturalMergeSort(toBeSorted, count, output, std::less<unsigned int>());
+	assert(isSorted(toBeSorted, count, std::less<unsigned int>()));
+
+	return 0;
+}
 int doublingTestForSorts(int argc, char *argv[]) {
+
+	DoublingTestForSort buMerge(3);
+	cout << "doubling test for bottom up merge sort:" << endl;
+	doublingTest((unsigned int) 128, (unsigned int) (1 << 21), buMerge);
+
+	DoublingTestForSort merge(4);
+	cout << "doubling test for merge sort:" << endl;
+	doublingTest((unsigned int) 128, (unsigned int) (1 << 21), merge);
+
 	DoublingTestForSort shell(0);
 	cout << "doubling test for shell sort:" << endl;
 	doublingTest((unsigned int) 128, (unsigned int) (1 << 21), shell);
@@ -584,6 +694,7 @@ int doublingTestForSorts(int argc, char *argv[]) {
 	DoublingTestForSort selection(1);
 	cout << "doubling test for selection sort:" << endl;
 	doublingTest((unsigned int) 128, (unsigned int) (1 << 21), selection);
+
 	return 0;
 }
 /**
@@ -666,7 +777,7 @@ class RunningTimePlotter {
 		while (!isDone) {
 			TTuple<N> tmp = val();
 			{
-				std::lock_guard < std::mutex > lk(m);
+				std::lock_guard<std::mutex> lk(m);
 				for (size_t i = 0; i < values.size(); ++i) {
 					vector<double>& v = values[i];
 					unsigned int& count = counts[i];
@@ -709,7 +820,7 @@ public:
 	void show() {
 		glClear(GL_COLOR_BUFFER_BIT);
 		{
-			std::lock_guard < std::mutex > lk(m);
+			std::lock_guard<std::mutex> lk(m);
 			double maxValue = getMaxValue();
 			glPointSize(3.0);
 			for (size_t i = 0; i < values.size(); ++i) {
@@ -756,25 +867,43 @@ public:
 		randUInts(values, start, start * 2);
 		double ratio = 200000.0;
 		clock_t begin = clock();
+		typedef AccessCountedArray<unsigned int, unsigned long long *> Array;
+		void (*func)(Array, unsigned int, Array,
+				std::less<unsigned int>) = nullptr;
 		switch (method) {
 		case 0:
 			insertionSort(values, (unsigned int) (values.size()),
 					std::less<unsigned int>());
 			start += step;
 			return {(double)(clock() - begin), (start - step) * (start - step) / ratio};
-			break;
 		case 1:
 			selectionSort(values, (unsigned int) (values.size()),
 					std::less<unsigned int>());
 			start += step;
 			return {(double)(clock() - begin), (start - step) * (start - step) / ratio};
-			break;
 		case 2:
 			shellSort(values, (unsigned int) (values.size()),
 					std::less<unsigned int>());
 			start += step;
 			return {(double)(clock() - begin), (start - step) * std::pow(start - step, 1 / 2.0) / ratio};
-			break;
+		case 3:
+			func = bottomUpMergeSort;
+		case 4:
+			if (func == nullptr)
+				func = mergeSort;
+		case 5: {
+			if (func == nullptr)
+				func = naturalMergeSort;
+
+			unsigned int tmpValues[values.size()];
+			unsigned long long counter = 0;
+			double val = 6 * start * std::log(start);
+			Array ar1(&values[0], &counter), ar2(tmpValues, &counter);
+			func(ar1, start, ar2, std::less<unsigned int>());
+			start += step;
+			return {(double)counter, val};
+			//return {(double)(clock() - begin), val / ratio};
+		}
 		}
 		return {0.0, 0.0};
 	}
@@ -818,21 +947,24 @@ class CompareDistributions {
 	unsigned int method = 0;
 	unsigned int distribution = 0;
 public:
-	CompareDistributions(unsigned int method) : method(method){
+	CompareDistributions(unsigned int method) :
+			method(method) {
 	}
 	template<class Func>
 	TTuple<4> testOne(Func func) {
 		TTuple<4> result;
-		if(func != nullptr){
+		if (func != nullptr) {
 			unsigned int values[start];
 			unsigned long long counter = 0;
 			AccessCountedArray<unsigned int, unsigned long long *> ar(values,
 					&counter);
-			std::default_random_engine rd;
-			std::uniform_int_distribution<unsigned int> discrete(0, 2 * start);
-			std::poisson_distribution<unsigned int> poisson(start);
-			std::geometric_distribution<unsigned int> geometric(1 / log(start));
-			std::normal_distribution<double> normal(start, start * 0.01);
+			static std::default_random_engine rd;
+			static std::uniform_int_distribution<unsigned int> discrete(0,
+					2 * start);
+			static std::poisson_distribution<unsigned int> poisson(start);
+			static std::geometric_distribution<unsigned int> geometric(
+					1 / log(start));
+			static std::normal_distribution<double> normal(start, start * 0.01);
 
 			std::generate(values, values + start, [&] {return discrete(rd);});
 			func(ar, start, std::less<unsigned int>());
@@ -849,7 +981,8 @@ public:
 			result.values[2] = counter;
 
 			counter = 0;
-			std::generate(values, values + start, [&] {return (unsigned int)normal(rd);});
+			std::generate(values, values + start,
+					[&] {return (unsigned int)normal(rd);});
 			func(ar, start, std::less<unsigned int>());
 			result.values[3] = counter;
 		}
@@ -861,14 +994,17 @@ public:
 		void (*func)(AccessCountedArray<unsigned int, unsigned long long *>,
 				unsigned int, std::less<unsigned int>) = nullptr;
 		switch (method) {
-		 case 0:
-			 func = selectionSort;break;
-		 case 1:
-			 func = insertionSort;break;
-		 case 2:
-			 func = shellSort;break;
-		 }
-		 start += 10;
+		case 0:
+			func = selectionSort;
+			break;
+		case 1:
+			func = insertionSort;
+			break;
+		case 2:
+			func = shellSort;
+			break;
+		}
+		start += 10;
 		return testOne(func);
 	}
 };
@@ -877,30 +1013,31 @@ class SpecialDistributions {
 	unsigned int method = 0;
 	unsigned int distribution = 0;
 public:
-	SpecialDistributions(unsigned int method = 0) : method(method){
+	SpecialDistributions(unsigned int method = 0) :
+			method(method) {
 	}
-	static void generate0(unsigned int *values, unsigned int count){
-		for(unsigned int i = 0;i < count;++ i)
+	static void generate0(unsigned int *values, unsigned int count) {
+		for (unsigned int i = 0; i < count; ++i)
 			values[i] = (i % 2);
 		std::random_shuffle(values, values + count);
 	}
-	static void generate1(unsigned int *values, unsigned int count){
-		for(unsigned int i = 0;i < count / 2;++ i)
+	static void generate1(unsigned int *values, unsigned int count) {
+		for (unsigned int i = 0; i < count / 2; ++i)
 			values[i] = 0;
 		randUInts(values + count / 2, values + count, count);
 		std::random_shuffle(values, values + count);
 	}
-	static void generate2(unsigned int *values, unsigned int count){
+	static void generate2(unsigned int *values, unsigned int count) {
 		unsigned int i = 0;
 		unsigned int *p = values;
-		unsigned int n  = count;
-		while(count != 1){
+		unsigned int n = count;
+		while (count != 1) {
 			unsigned int tmp = count / 2;
-			for(unsigned int j = 0;j < tmp;++ j)
+			for (unsigned int j = 0; j < tmp; ++j)
 				values[j] = i;
 			values += tmp;
 			count -= tmp;
-			++ i;
+			++i;
 		}
 		*values = i;
 		std::random_shuffle(p, p + n);
@@ -908,7 +1045,7 @@ public:
 	template<class Func>
 	TTuple<3> testOne(Func func) {
 		TTuple<3> result;
-		if(func != nullptr){
+		if (func != nullptr) {
 			unsigned int values[start];
 			unsigned long long counter = 0;
 			AccessCountedArray<unsigned int, unsigned long long *> ar(values,
@@ -936,14 +1073,17 @@ public:
 		void (*func)(AccessCountedArray<unsigned int, unsigned long long *>,
 				unsigned int, std::less<unsigned int>) = nullptr;
 		switch (method) {
-		 case 0:
-			 func = selectionSort;break;
-		 case 1:
-			 func = insertionSort;break;
-		 case 2:
-			 func = shellSort;break;
-		 }
-		 start += 10;
+		case 0:
+			func = selectionSort;
+			break;
+		case 1:
+			func = insertionSort;
+			break;
+		case 2:
+			func = shellSort;
+			break;
+		}
+		start += 10;
 		return testOne(func);
 	}
 };
@@ -1003,6 +1143,88 @@ public:
 							Irts { 1, 3, 7, 31, 127, 8191, }, }) {
 	}
 };
+template<int N>
+class MergeSortCompare {
+	unsigned int start = 100;
+	bool measureTime = true;
+public:
+	static void generate(unsigned int *values, unsigned int count) {
+		randUInts(values, values + count, 2 * count);
+		//SpecialDistributions::generate2(origin, start);
+		//std::sort(values, values + count);
+
+		//unsigned int tmp = count * 0.1;
+		//for(unsigned int i = 0;i < tmp;++ i)
+		//	swap(values[rand() % count], values[rand() % count]);
+	}
+	typedef AccessCountedArray<unsigned int, unsigned long long *> Array;
+	typedef void (*Func)(Array, unsigned int, Array, std::less<unsigned int>);
+	TTuple<N> operator()() {
+		unsigned int origin[start];
+		unsigned int toBeSorted[start];
+		unsigned int tmpValues[start];
+		clock_t duration = 0;
+		unsigned long long counter = 0;
+		Func *func = funcs.values;
+		Array ar1(toBeSorted, &counter), ar2(tmpValues, &counter);
+		TTuple<N> result;
+
+		generate(origin, start);
+		for (size_t i = 0; i < N; ++i) {
+			std::copy(origin, origin + start, toBeSorted);
+			counter = 0;
+			duration = clock();
+			func[i](ar1, start, ar2, std::less<unsigned int>());
+			duration = clock() - duration;
+			if(!measureTime)
+				duration = counter;
+			result.values[i] = duration;
+		}
+		start *= 1.01;
+		//start += 10;
+		return result;
+	}
+	void set(Func fs[N]) {
+		for (int i = 0; i < N; ++i) {
+			funcs.values[i] = fs[i];
+		}
+	}
+	//MergeSortCompare(const TTuple<N, Func>& funcs) : funcs(funcs){
+	//}
+protected:
+	TTuple<N, Func> funcs;
+};
+class DifferentMergeCompare: public MergeSortCompare<3> {
+public:
+	DifferentMergeCompare() {
+		Func tmps[3] = { bottomUpMergeSort, mergeSort, naturalMergeSort };
+		set(tmps);
+	}
+
+};
+class DifferentCutOffCompare: public MergeSortCompare<7> {
+public:
+	DifferentCutOffCompare() {
+		Func tmps[] = {
+			mergeSort<Array, Array,
+			std::less<unsigned int>, true, 5>,
+			mergeSort<Array, Array,
+			std::less<unsigned int>, true, 8>,
+			mergeSort<Array, Array,
+			std::less<unsigned int>, true, 11>,
+			mergeSort<Array, Array,
+			std::less<unsigned int>, true, 14>,
+			mergeSort<Array, Array,
+			std::less<unsigned int>, true, 17>,
+			mergeSort<Array, Array,
+			std::less<unsigned int>, true, 20>,
+			mergeSort<Array, Array,
+			std::less<unsigned int>, true, 23>,
+		};
+		set(tmps);
+	}
+
+};
 class ShellSortIncrementCompare2: public ShellSortIncrementCompare<12> {
 public:
 	typedef vector<unsigned int> Irts;
@@ -1051,7 +1273,8 @@ public:
 template<class T, int N>
 thread_local RunningTimePlotter<T, N> *RunningTimePlotter<T, N>::instance =
 		nullptr;
-int main(int argc, char *argv[]) {
+
+int testPlotting(int argc, char *argv[]) {
 	//InsertionSortAndSelectionSortAnimation test;
 	//ShellSortTraces test;
 //	ShellSortIncrementCompare1 tmp;
@@ -1078,9 +1301,51 @@ int main(int argc, char *argv[]) {
 //					1.0, 1.0, 0.0,
 //					1.0, 0.0, 0.0,
 //			});
-	SpecialDistributions tmp(1);
-	RunningTimePlotter<SpecialDistributions, 3> test(tmp,
-			{ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0});
+//	SpecialDistributions tmp(1);
+//	RunningTimePlotter<SpecialDistributions, 3> test(tmp, { 1.0, 0.0, 0.0, 0.0,
+//			1.0, 0.0, 1.0, 1.0, 0.0 });
+//	return test.run(argc, argv);
+//	SortingTime tmp(3);
+//	RunningTimePlotter<SortingTime, 2> test(tmp,
+//			{ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0 });
+//	DifferentCutOffCompare tmp;
+//	RunningTimePlotter<DifferentCutOffCompare, 7> test(tmp,
+//			{
+//										0.1, 0.1, 0.1,
+//										0.2, 0.2, 0.0,
+//										0.3, 0.3, 0.0,
+//										0.4, 0.4, 0.0,
+//										0.5, 0.5, 0.0,
+//										0.6, 0.6, 0.0,
+//										0.7, 0.7, 0.7,
+//			});
+	DifferentMergeCompare tmp;
+	RunningTimePlotter<DifferentMergeCompare, 3> test(tmp,
+			{
+										1.0, 0.0, 0.0,
+										0.0, 1.0, 0.0,
+										1.0, 1.0, 0.0,
+			});
 	return test.run(argc, argv);
-	//return testForSortingZeroOneArrays(argc, argv);
+}
+template<int N>
+struct NumberOfOrderedSubarray{
+	unsigned int counts[N + 1][N + 1][N + 1];
+	NumberOfOrderedSubarray(){
+		for(unsigned int i = 0;i <= N;++ i)
+			for(unsigned int j = 0;j <= N;++ j)
+				for(unsigned int k = 0;k <= N;++ k)
+					counts[i][j][k] = 0;
+		counts[0][0][0] = 1;
+
+		for(unsigned int i = 1;i <= N;++ i)
+			for(unsigned int j = 0;j <= N;++ j){
+				for(unsigned int k = 1;k <=N;++ k){
+					//for(unsigned int s = 1;);
+				}
+			}
+	}
+};
+int main(int argc, char *argv[]) {
+	return 0;
 }
