@@ -1,6 +1,6 @@
 /**
  * This file is for the test, visualization, comparison of some basic sorting algorithms,
- * that is selection sort, insertion sort and shell sort.
+ * that is selection sort, insertion sort, shell sort and merge sort.
  *
  * The algorithms in this file comes from the book "algorithms 4th edition", section 2.1.
  * Many of the codes are solutions to the exercise of section 2.1.
@@ -22,6 +22,8 @@
 #include <mutex>
 #include <cassert>
 #include <condition_variable>
+#include <unordered_map>
+#include <map>
 #include <chrono>
 #include <tuple>
 #include "common.h"
@@ -147,7 +149,11 @@ void shellSort(T a, unsigned int n, U increments, unsigned int m,
 }
 
 /**
- * merge two sorted array into one sorted array
+ * Merge two sorted array into one sorted array.
+ * If {@code ar1} and {@code ar2} contains the some "equal" elements,
+ *  the elements in {@code ar1} will be put before the elements in {@code ar2}
+ *  in the merged sorted array.
+ *  This is important for the stability of algorithms like merge sort.
  *
  * @param ar1 One of the arrays to be merged
  * @param n1 Number of elements in array {@code ar1}
@@ -155,6 +161,9 @@ void shellSort(T a, unsigned int n, U increments, unsigned int m,
  * @param n2 Number of elements in array {@code ar2}
  * @param output The merged sorted array.
  * @param comparator The "less than" relation between every two element.
+ *
+ * The expected number of elements remaining in the other array when the first
+ * array is exhausted is about 2(1- 1/ceil(n/2)).
  */
 template<class T, class U, class Comparator>
 void merge(T ar1, unsigned int n1, T ar2, unsigned int n2, U output,
@@ -173,18 +182,34 @@ void merge(T ar1, unsigned int n1, T ar2, unsigned int n2, U output,
 		}
 		++k;
 	}
+
 	while (i < n1)
 		output[k++] = ar1[i++];
 	while (j < n2)
 		output[k++] = ar2[j++];
-
 }
-
+/**
+ * Top-down merge sort.
+ * @param ar The array to be sorted.
+ * @param n Number of elements in the array.
+ * @param output An auxiliary array that will be used by this sorting procedure,
+ * 		the length of it should be at list the same as {@code ar}.
+ * 	@comparator The "less than" relation between any two element in the array
+ *
+ * After returned from this procedure, the elements in {@code ar} will be sorted.
+ *
+ * Note the template argument {@code optimize} indicates whether to used the
+ * optimized version of the algorithm. {@code cutoff} is a threshold value,
+ * when {@code n} is not greater than this value insertion sort will be used.
+ */
 template<class T, class U, class Comparator, bool optimize = true,
 		unsigned int cutoff = 10>
 void mergeSort(T ar, unsigned int n, U output, Comparator comparator) {
+	//if only one element no need to sort
 	if (n <= 1)
 		return;
+	//if use the optimized version and the elements to be sorted is less than the "cutoff" value
+	//insertion sort will be used.
 	if (optimize && n <= cutoff) {
 		insertionSort(ar, n, comparator);
 		return;
@@ -192,16 +217,104 @@ void mergeSort(T ar, unsigned int n, U output, Comparator comparator) {
 	decltype(n) n1 = n / 2;
 	decltype(n) n2 = n - n1;
 	T ar2 = ar + n1;
+
+	//sort the left half
 	mergeSort(ar, n1, output, comparator);
+	//sort the right half
 	mergeSort(ar2, n2, output + n1, comparator);
+	//if use the optimized version and the smallest element in the right half
+	//is greater than the largest element in the left half, then no need to merge.
+	//The possibility that this optimization succeeds depend on the "cutoff" value,
+	//For a cutoff value of "11", the possibility is less than 0.002
+	//	(about 1.0/C(cutoff, cutoff / 2), where C(m,n) is the combination of "m" and "n"
+	//Several tests have validated this assertion.
 	if (optimize && !comparator(ar[n1], ar[n1 - 1])) {
 		return;
 	}
 
+	//merge the left and left sorted subarrays.
 	merge(ar, n1, ar2, n2, output, comparator);
 	for (decltype(n) i = 0; i < n; ++i)
 		ar[i] = output[i];
 }
+/**
+ * Merge two sorted array and into one sorted array and count the number of inversions if {@code ar2}
+ * is directly concanated to {@code ar1} without merge.
+ *
+ * @param ar1 The first sorted array.
+ * @param n1 Number of elements in the first array.
+ * @param ar2 The second sorted array.
+ * @param n2 Number of elements in the second array.
+ * @param output An auxiliary array that will be used by this algorithm.
+ * @param comparator The "less than" relation between any two elements.
+ * @return The number of inversions.
+ */
+template<class T, class U, class Comparator>
+unsigned int mergeWithInversionCount(T ar1, unsigned int n1, T ar2,
+		unsigned int n2, U output, Comparator comparator) {
+	decltype(n1) i = 0;
+	decltype(n2) j = 0;
+	auto count = n1 + n2;
+	decltype(count) k = 0;
+	unsigned int counter = 0;
+	while (i < n1 && j < n2) {
+		if (comparator(ar2[j], ar1[i])) {
+			output[k] = ar2[j];
+			counter += (n1 - i);
+			++j;
+		} else {
+			output[k] = ar1[i];
+			++i;
+		}
+		++k;
+	}
+
+	while (i < n1)
+		output[k++] = ar1[i++];
+	while (j < n2)
+		output[k++] = ar2[j++];
+	return counter;
+}
+
+/**
+ * Count the number of inversions in the input array. The cost of this algorithm is linearithmic.
+ * @param ar The array in which the number of inversions will be counted.
+ * @param n Number of elements in the array.
+ * @param output An auxiliary array that will be used by this algorithm.
+ * @param comparator The "less than" relation between any two elements.
+ * @return The number of inversions.
+ */
+template<class T, class U, class Comparator>
+unsigned int countInversions(T ar, unsigned int n, U output,
+		Comparator comparator) {
+	if (n <= 1)
+		return 0;
+	decltype(n) n1 = n / 2;
+	decltype(n) n2 = n - n1;
+	T ar2 = ar + n1;
+	unsigned int counter = countInversions(ar, n1, output, comparator);
+	counter += countInversions(ar2, n2, output + n1, comparator);
+
+	counter += mergeWithInversionCount(ar, n1, ar2, n2, output, comparator);
+	for (decltype(n) i = 0; i < n; ++i)
+		ar[i] = output[i];
+	return counter;
+}
+/**
+ * Find the first index, say {@var i},  in an array of length n, starting from index {@var offset},
+ * such that the range [offset, i) is in increasing order, but the range [offset, i] is not in increasing order.
+ * If the range [offset, n) is in increasing order(we define that an empty range is always in increasing order),
+ * then offset will be returned.
+ * We define this index as : first disorder index.
+ *
+ * The cost of this algorithm is linear.
+ *
+ * @param values The array bo be searched.
+ * @param n Number of elements in the array.
+ * @param comparator The "less than" relation between two elements in the array
+ * @param offset The index from which to start the search.
+ * @return The first disorder index.
+ */
 template<class T, class Comparator>
 unsigned int firstDisorderIndex(T values, unsigned int n, Comparator comparator,
 		unsigned int offset = 0) {
@@ -209,6 +322,33 @@ unsigned int firstDisorderIndex(T values, unsigned int n, Comparator comparator,
 		if (comparator(values[i], values[i - 1]))
 			return i;
 	return offset;
+}
+/**
+ * Find the number of ordered sub-arrays.
+ *
+ * An ordered sub-array of an array {@var A}, starting from index {@var i} and ending at index {@var j},
+ * is the range [i, j) and A[i] < A[i - 1] if i > 0, A[j] < A[j - 1].
+ *
+ * The cost of this algorithm is linear.
+ *
+ * @param values The array to be searched.
+ * @param n Number of elements in the array.
+ * @param comparator The "less than" relation between two elements.
+ */
+template<class T, class Comparator>
+unsigned int numberOfOrderedSubarrays(T values, unsigned int n,
+		Comparator comparator) {
+	if (n == 0)
+		return 0;
+	unsigned int count = 0;
+	unsigned int i = 0;
+	unsigned int tmp = 0;
+	while ((tmp = firstDisorderIndex(values, n, comparator, i)) != i) {
+		++count;
+		i = tmp;
+	}
+	++count;
+	return count;
 }
 template<class T, class U, class Comparator>
 void bottomUpMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
@@ -234,7 +374,8 @@ void bottomUpMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
 			output[i] = ar[i];
 	}
 	double expected = ceil(std::log(n) / std::log(2));
-	cout << "bottom up actual passes : " << passes << ", expected passes : " << expected << ", ratio : " << passes / expected << endl;
+	cout << "bottom up actual passes : " << passes << ", expected passes : "
+			<< expected << ", ratio : " << passes / expected << endl;
 }
 template<class T, class U, class Comparator>
 void naturalMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
@@ -254,7 +395,7 @@ void naturalMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
 			isArSorted = (!isArSorted);
 			last = 0;
 			offset = 2 * offset + 1;
-			++ passes;
+			++passes;
 			continue;
 		}
 
@@ -270,7 +411,8 @@ void naturalMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
 			output[i] = ar[i];
 	}
 	double expected = ceil(std::log(n) / std::log(2));
-	cout << "natural actual passes : " << passes << ", expected passes : " << expected << ", ratio : " << passes / expected << endl;
+	cout << "natural actual passes : " << passes << ", expected passes : "
+			<< expected << ", ratio : " << passes / expected << endl;
 }
 template<class T, class Comparator>
 static bool isSorted(T values, unsigned int n, Comparator comparator) {
@@ -1176,7 +1318,7 @@ public:
 			duration = clock();
 			func[i](ar1, start, ar2, std::less<unsigned int>());
 			duration = clock() - duration;
-			if(!measureTime)
+			if (!measureTime)
 				duration = counter;
 			result.values[i] = duration;
 		}
@@ -1206,21 +1348,13 @@ class DifferentCutOffCompare: public MergeSortCompare<7> {
 public:
 	DifferentCutOffCompare() {
 		Func tmps[] = {
-			mergeSort<Array, Array,
-			std::less<unsigned int>, true, 5>,
-			mergeSort<Array, Array,
-			std::less<unsigned int>, true, 8>,
-			mergeSort<Array, Array,
-			std::less<unsigned int>, true, 11>,
-			mergeSort<Array, Array,
-			std::less<unsigned int>, true, 14>,
-			mergeSort<Array, Array,
-			std::less<unsigned int>, true, 17>,
-			mergeSort<Array, Array,
-			std::less<unsigned int>, true, 20>,
-			mergeSort<Array, Array,
-			std::less<unsigned int>, true, 23>,
-		};
+				mergeSort<Array, Array, std::less<unsigned int>, true, 5>,
+				mergeSort<Array, Array, std::less<unsigned int>, true, 8>,
+				mergeSort<Array, Array, std::less<unsigned int>, true, 11>,
+				mergeSort<Array, Array, std::less<unsigned int>, true, 14>,
+				mergeSort<Array, Array, std::less<unsigned int>, true, 17>,
+				mergeSort<Array, Array, std::less<unsigned int>, true, 20>,
+				mergeSort<Array, Array, std::less<unsigned int>, true, 23> , };
 		set(tmps);
 	}
 
@@ -1320,32 +1454,406 @@ int testPlotting(int argc, char *argv[]) {
 //										0.7, 0.7, 0.7,
 //			});
 	DifferentMergeCompare tmp;
-	RunningTimePlotter<DifferentMergeCompare, 3> test(tmp,
-			{
-										1.0, 0.0, 0.0,
-										0.0, 1.0, 0.0,
-										1.0, 1.0, 0.0,
-			});
+	RunningTimePlotter<DifferentMergeCompare, 3> test(tmp, { 1.0, 0.0, 0.0, 0.0,
+			1.0, 0.0, 1.0, 1.0, 0.0, });
 	return test.run(argc, argv);
 }
-template<int N>
-struct NumberOfOrderedSubarray{
-	unsigned int counts[N + 1][N + 1][N + 1];
-	NumberOfOrderedSubarray(){
-		for(unsigned int i = 0;i <= N;++ i)
-			for(unsigned int j = 0;j <= N;++ j)
-				for(unsigned int k = 0;k <= N;++ k)
-					counts[i][j][k] = 0;
-		counts[0][0][0] = 1;
 
-		for(unsigned int i = 1;i <= N;++ i)
-			for(unsigned int j = 0;j <= N;++ j){
-				for(unsigned int k = 1;k <=N;++ k){
-					//for(unsigned int s = 1;);
-				}
+struct NaturalOrderAnalysis {
+	/**
+	 * Count the number of cases, denoted by C(n, i),  that there are i ordered subarrays in an array of length n.
+	 *
+	 * @param n Length of an array.
+	 * @param counts {@code counts[i]} denote the number of cases that that there
+	 * 		are (i+1) ordered subarray in an array of length {@code n}
+	 *
+	 * 	Note :
+	 * 		The following recurrence relation is used :
+	 * 			C(n + 1, i) = i * C(n, i) + (n + 2 - i) * C(n, i - 1), for 2 <= i <= n
+	 * 			C(n + 1, 1) = C(n + 1, n + 1) = 1
+	 */
+	static void count(unsigned int n, unsigned long long *counts) {
+		if (n == 0)
+			return;
+		counts[0] = 1;
+		if (n == 1)
+			return;
+
+		counts[1] = 1;
+		for (unsigned int j = 3; j <= n; ++j) {
+
+			unsigned long long last = counts[0];
+			for (unsigned int i = 1; i < j - 1; ++i) {
+				unsigned long long tmp = counts[i];
+				counts[i] = i * tmp + (j + 1 - i) * last;
+				last = tmp;
 			}
+			counts[j - 1] = 1;
+		}
+
+	}
+	static void validateAlgorithm() {
+		unsigned int values1[] = { 0, 1, 2, 3, 4 };
+		unsigned int values2[] = { 4, 3, 2, 1, 0 };
+		unsigned int values3[] = { 0, 3, 1, 2, 5, 4 };
+		unsigned int values4[] = { 1, 1, 1, 0, 0, 0, 1, 1, 0 };
+		assert(
+				numberOfOrderedSubarrays(values1,
+						(sizeof values1 / sizeof(*values1)),
+						std::less<unsigned int>()) == 1);
+		assert(
+				numberOfOrderedSubarrays(values2,
+						(sizeof values2 / sizeof(*values2)),
+						std::less<unsigned int>()) == 5);
+		assert(
+				numberOfOrderedSubarrays(values3,
+						(sizeof values3 / sizeof(*values3)),
+						std::less<unsigned int>()) == 3);
+		assert(
+				numberOfOrderedSubarrays(values4,
+						(sizeof values4 / sizeof(*values4)),
+						std::less<unsigned int>()) == 3);
+	}
+	/**
+	 * Given an randomly generated array of length n, what's the expected number of ordered subarrays in it?
+	 * Denote the expected number of ordered subarrays in an array of length n as E(n).
+	 * Then we will have the following recurrence relation:
+	 * 		E(n+1) = (n / (n+1))E(n) + 1;
+	 * 		The base case is E(1) = 1.
+	 * 	After solving this recurrence relation, we will have
+	 * 		E(n) = (n + 1) / 2
+	 *
+	 */
+	static int test(unsigned int argc, char *argv[]) {
+		validateAlgorithm();
+
+		unsigned int start = 3;
+		while (start <= 10000) {
+			unsigned int values[start];
+			unsigned int iteration = 1;
+			unsigned int count = 0;
+			for (unsigned int i = 0; i < start; ++i)
+				values[i] = i;
+			for (unsigned int i = 0; i < iteration; ++i) {
+				std::random_shuffle(values, values + start);
+				count += numberOfOrderedSubarrays(values, start,
+						std::less<unsigned int>());
+			}
+
+			double average = count / (double) iteration;
+			cout << "expected : " << (start + 1) / 2 << ", actual : " << average
+					<< ", ratio : " << average * 2 / (start + 1) << endl;
+			start += 10;
+		}
+		return 0;
+	}
+};
+struct ExpectedInversions {
+	static void validateAlgorithm() {
+		unsigned int values1[] = { 1, 2, 3, 4, 5, 6 };
+		unsigned int values2[] = { 6, 5, 4, 3, 2, 1 };
+		unsigned int values3[] = { 3, 1, 2, 5, 4, 1 };
+		unsigned int values4[] = { 1, 1, 1, 0, 0, 0 };
+		unsigned int aux[20];
+		assert(
+				countInversions(values1, (sizeof values1 / sizeof(*values1)),
+						aux, std::less<unsigned int>()) == 0);
+		assert(
+				countInversions(values2, (sizeof values2 / sizeof(*values2)),
+						aux, std::less<unsigned int>()) == 15);
+		assert(
+				countInversions(values3, (sizeof values3 / sizeof(*values3)),
+						aux, std::less<unsigned int>()) == 7);
+		assert(
+				countInversions(values4, (sizeof values4 / sizeof(*values4)),
+						aux, std::less<unsigned int>()) == 9);
+	}
+	/**
+	 * For an randomly generated array of length {@var n}, the expected number of
+	 * inversions in it is {@code n * (n - 1) / 2}
+	 */
+	static int test(unsigned int argc, char *argv[]) {
+		validateAlgorithm();
+		unsigned int start = 3;
+		while (start <= 10000) {
+			unsigned int values[start];
+			unsigned int aux[start];
+			unsigned int iteration = 100;
+			unsigned long long count = 0;
+			for (unsigned int i = 0; i < start; ++i)
+				values[i] = i;
+			for (unsigned int i = 0; i < iteration; ++i) {
+				std::random_shuffle(values, values + start);
+				count += countInversions(values, start, aux,
+						std::less<unsigned int>());
+			}
+
+			double average = count / (double) iteration;
+			double expected = start * (start - 1) / 4;
+			cout << "expected : " << expected << ", actual : " << average
+					<< ", ratio : " << average / expected << endl;
+			start += 10;
+		}
+		return 0;
+	}
+};
+template<class T>
+struct LinkedList {
+	struct Link {
+		T val;
+		Link *next;
+		Link * prev;
+		Link(const T&val, Link *n = nullptr, Link *p = nullptr) :
+				val(val), next(n), prev(p) {
+
+		}
+	};
+	template<class Comparator = std::less<T> >
+	void sort(Comparator comparator = Comparator()) {
+		if (count <= 1)
+			return;
+		LinkedList newList;
+		split(count / 2, newList);
+		sort(comparator);
+		newList.sort(comparator);
+		merge(newList, comparator);
+	}
+	template<class Comparator = std::less<T> >
+	bool isSorted(Comparator comparator = Comparator()) {
+		if (count <= 1)
+			return true;
+		Link *i = head;
+		Link *j = i->next;
+		while (j != nullptr) {
+			if (comparator(j->val, i->val))
+				return false;
+			i = j;
+			j = i->next;
+		}
+		return true;
+	}
+	template<class Random>
+	void shuffle(Random random) {
+		if (count <= 1)
+			return;
+		LinkedList newList;
+		split(count / 2, newList);
+		shuffle(random);
+		newList.shuffle(random);
+		randomMerge(newList, random);
+	}
+	bool empty() {
+		return count == 0;
+	}
+	void swap(LinkedList& l) {
+		std::swap(head, l.head);
+		std::swap(tail, l.tail);
+		std::swap(count, l.count);
+	}
+	template<class Comparator = std::less<T> >
+	void merge(LinkedList& l, Comparator comparator = Comparator()) {
+		LinkedList newList;
+		merge(*this, l, newList, comparator);
+		swap(newList);
+	}
+
+	template<class Random>
+	void randomMerge(LinkedList& l, Random random) {
+		LinkedList newList;
+		randomMerge(*this, l, newList, random);
+		swap(newList);
+	}
+	void split(unsigned int count, LinkedList& l) {
+		Link *link = head;
+		if (count == 0) {
+			swap(l);
+			return;
+		}
+		for (unsigned int i = 0; i < count && link != nullptr;
+				++i, link = link->next)
+			;
+		if (link != nullptr) {
+			l.head = link;
+			l.tail = tail;
+			tail = link->prev;
+			tail->next = nullptr;
+			l.head->prev = nullptr;
+			l.count = this->count - count;
+			this->count = count;
+		}
+	}
+	template<class Comparator = std::less<T> >
+	LinkedList() :
+			head(nullptr), tail(nullptr), count(0) {
+	}
+	~LinkedList() {
+		clear();
+	}
+	void clear() {
+		Link *link = head;
+		while (link != nullptr) {
+			Link *next = link->next;
+			delete link;
+			link = next;
+		}
+		head = tail = nullptr;
+		count = 0;
+	}
+	void push_back(const T& val) {
+		add(new Link(val, nullptr, nullptr));
+	}
+	const Link* getHead() const {
+		return head;
+	}
+	LinkedList& operator=(const LinkedList&) = delete;
+	LinkedList(const LinkedList&) = delete;
+	template<class Comparator = std::less<T> >
+	static void merge(LinkedList& l1, LinkedList& l2, LinkedList& l,
+			Comparator comparator = Comparator()) {
+		while (!l1.empty() && !l2.empty()) {
+			Link *i1 = l1.head;
+			Link *i2 = l2.head;
+			if (comparator(i2->val, i1->val)) {
+				l2.remove(i2);
+				l.add(i2);
+			} else {
+				l1.remove(i1);
+				l.add(i1);
+			}
+		}
+		l.addBack(l1);
+		l.addBack(l2);
+	}
+	template<class Random>
+	static void randomMerge(LinkedList& l1, LinkedList& l2, LinkedList& l,
+			Random random) {
+		while (!l1.empty() && !l2.empty()) {
+			unsigned int tmp = random() % (l2.count + 1);
+			Link *i1 = l1.head;
+			LinkedList newList;
+			l2.split(tmp, newList);
+			l.addBack(l2);
+			newList.swap(l2);
+			l1.remove(i1);
+			l.add(i1);
+		}
+		l.addBack(l1);
+		l.addBack(l2);
+	}
+private:
+	void add(Link *link) {
+		if (head == nullptr) {
+			assert(count == 0);
+			assert(tail == nullptr);
+			head = tail = link;
+		} else {
+			assert(count != 0);
+			assert(tail != nullptr);
+			link->next = tail->next;
+			link->prev = tail;
+			tail->next = link;
+			tail = link;
+		}
+		++count;
+	}
+	void remove(Link *link) {
+		if (link == head) {
+			head = link->next;
+			if (head != nullptr) {
+				assert(count > 1);
+				assert(tail != link);
+				head->prev = nullptr;
+			} else {
+				assert(count == 1);
+				assert(tail == link);
+			}
+		} else if (link == tail) {
+			assert(tail != head);
+			tail = link->prev;
+			tail->next = nullptr;
+			assert(count > 1);
+		} else {
+			Link *prev = link->prev;
+			Link *next = link->next;
+			prev->next = next;
+			next->prev = prev;
+		}
+		--count;
+		return;
+	}
+	void addBack(LinkedList& l) {
+		if (head == nullptr) {
+			swap(l);
+		} else if (l.head != nullptr) {
+			l.head->prev = tail;
+			tail->next = l.head;
+			tail = l.tail;
+			count += l.count;
+			l.head = l.tail = nullptr;
+			l.count = 0;
+		}
+	}
+	Link *head, *tail;
+	unsigned int count;
+};
+struct LinkedListTest {
+	static void generate(unsigned int count, LinkedList<unsigned int>& l) {
+		std::random_device rd;
+		std::uniform_int_distribution<unsigned int> generator(0, 2 * count);
+		l.clear();
+		for (unsigned int i = 0; i < count; ++i)
+			l.push_back(generator(rd));
+	}
+	static void output(const LinkedList<unsigned int>& l, ostream& os) {
+		auto begin = l.getHead();
+		while (begin != nullptr) {
+			os << begin->val << ' ';
+			begin = begin->next;
+		}
+		os << endl;
+	}
+	static int test(int argc, char *argv[]) {
+		for (unsigned int start = 2; start <= 1000; start += 10) {
+			LinkedList<unsigned int> l;
+			generate(start, l);
+			l.sort();
+			if (start <= 40)
+				output(l, cout);
+			assert(l.isSorted());
+		}
+		unsigned int iteration = 10000;
+		unsigned int count = 10;
+		unsigned int counts[count][count];
+		LinkedList<unsigned int> l;
+		for(auto& ar : counts)
+			for(auto& val : ar)
+				val = 0;
+
+		for (unsigned int i = 0; i < count; ++i)
+			l.push_back(i);
+		output(l, cout);
+		cout << "shuffle test : " << endl;
+		for (unsigned int i = 0; i < iteration; ++i) {
+			l.shuffle(rand);
+			output(l, cout);
+			unsigned int j = 0;
+			auto begin = l.getHead();
+			while (begin != nullptr) {
+				++ counts[begin->val][j];
+				++ j;
+				begin = begin->next;
+			}
+		}
+
+		for(auto& ar : counts){
+			for(auto& val : ar){
+				cout << val / (double)iteration << '\t';
+			}
+			cout << endl;
+		}
+		return 0;
 	}
 };
 int main(int argc, char *argv[]) {
-	return 0;
+	return LinkedListTest::test(argc, argv);
 }
