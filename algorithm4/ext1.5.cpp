@@ -1025,7 +1025,6 @@ public:
 	RandomGridAnimate(unsigned int m, unsigned int n) :
 			m(m), n(n), uf(m * n) {
 		instance = this;
-		reset();
 	}
 	void reset() {
 		current = 0;
@@ -1045,6 +1044,7 @@ public:
 		glutInitWindowSize(640, 480);
 		glutInitWindowPosition(0, 0);
 		glutCreateWindow("Test");
+		reset();
 		glutDisplayFunc(display);
 		glutTimerFunc(interval, timer, 1000);
 		glutKeyboardFunc(keyboard);
@@ -1057,11 +1057,11 @@ public:
 };
 template<class T>
 RandomGridAnimate<T>* RandomGridAnimate<T>::instance = NULL;
-/*int main(int argc, char *argv[]) {
+//int main(int argc, char *argv[]) {
  //UFPerformancePloter ploter;
  //return ploter.run(argc, argv);
  //ErdosRenyi erdosRenyi(10000);
  //erdosRenyi.run(argc, argv);
  //RandomGridAnimate<UFWrapper<QuickFindUF> > instance(15, 15);
  //return instance.run(argc, argv);
- }*/
+ //}

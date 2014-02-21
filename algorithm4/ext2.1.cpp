@@ -47,6 +47,27 @@ public:
 			++*counter;
 		return val[index];
 	}
+	AccessCountedArray& operator++() {
+		++val;
+		return *this;
+	}
+	T& operator*() {
+		return *val;
+	}
+	AccessCountedArray operator++(int) {
+		AccessCountedArray old = *this;
+		++val;
+		return old;
+	}
+	bool operator==(AccessCountedArray array) {
+		return val == array.val;
+	}
+	bool operator!=(AccessCountedArray array) {
+		return val != array.val;
+	}
+	int operator-(AccessCountedArray array) {
+			return val - array.val;
+	}
 	operator T*() {
 		return val;
 	}
@@ -55,6 +76,9 @@ public:
 	}
 	AccessCountedArray operator+(unsigned int n) {
 		return {val + n, counter};
+	}
+	AccessCountedArray operator-(unsigned int n) {
+		return {val - n, counter};
 	}
 	const T& operator[](unsigned int index) const {
 		if (counter != NULL)
@@ -365,7 +389,6 @@ unsigned int numberOfOrderedSubarrays(T values, unsigned int n,
 template<class T, class U, class Comparator>
 void bottomUpMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
 	bool isArSorted = true;
-	unsigned int passes = 0;
 	for (unsigned int sz = 1; sz < n; sz += sz) {
 		unsigned int cnt = sz + sz;
 		unsigned int j = 0;
@@ -376,18 +399,17 @@ void bottomUpMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
 		if (j + sz < n) {
 			merge(ar + j, sz, ar + (j + sz), n - sz - j, output + j,
 					comparator);
+		} else {
+			for (unsigned int i = j; i < n; ++i)
+				output[i] = ar[i];
 		}
 		std::swap(ar, output);
 		isArSorted = (!isArSorted);
-		++passes;
 	}
 	if (!isArSorted) {
 		for (decltype(n) i = 0; i < n; ++i)
 			output[i] = ar[i];
 	}
-	double expected = ceil(std::log(n) / std::log(2));
-	cout << "bottom up actual passes : " << passes << ", expected passes : "
-			<< expected << ", ratio : " << passes / expected << endl;
 }
 template<class T, class U, class Comparator>
 void naturalMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
@@ -422,9 +444,6 @@ void naturalMergeSort(T ar, unsigned int n, U output, Comparator comparator) {
 		for (decltype(n) i = 0; i < n; ++i)
 			output[i] = ar[i];
 	}
-	double expected = ceil(std::log(n) / std::log(2));
-	cout << "natural actual passes : " << passes << ", expected passes : "
-			<< expected << ", ratio : " << passes / expected << endl;
 }
 template<class T, class Comparator>
 bool isSorted(T values, unsigned int n, Comparator comparator) {
@@ -472,33 +491,48 @@ unsigned int partition(T a, unsigned int n, Comparator comparator) {
  * @param comparator The "less than" relation between two elements in the array.
  */
 //static unsigned int smallArrayCount;
-template<class T, class Comparator, class PartitionMethod, bool optimize = false, unsigned int cutoff = 5>
-void quickSortBase(T a, unsigned int n, Comparator comparator,
+template<class T, class Comparator, class PartitionMethod,
+		bool optimize = false, unsigned int cutoff = 5,
+		unsigned int toBeIgnored = 1>
+unsigned int quickSortBase1(T a, unsigned int n, Comparator comparator,
 		PartitionMethod partition) {
-	if (n <= 1)
-		return;
-	if(optimize && n <= cutoff){
+	if (n <= toBeIgnored)
+		return 1;
+	if (optimize && n <= cutoff) {
 		insertionSort(a, n, comparator);
-		return ;
+		return 1;
 	}
 	unsigned int j = partition(a, n, comparator);
 	//if(j <= 2)
 	//	++ smallArrayCount;
 	//if(j + 1 + 2 >= n)
 	//	++smallArrayCount;
+	unsigned int l = 1, r = 1;
 	if (j > 1)
-		quickSortBase(a, j, comparator, partition);
+		l += quickSortBase1(a, j, comparator, partition);
 	if (j + 2 < n)
-		quickSortBase(a + (j + 1), n - j - 1, comparator, partition);
+		r += quickSortBase1(a + (j + 1), n - j - 1, comparator, partition);
+	return std::max(l, r);
 }
-template<class T, class Comparator, bool optimize = false, unsigned int cutoff = 5>
+unsigned int recursionDepth = 0;
+template<class T, class Comparator, class PartitionMethod,
+		bool optimize = false, unsigned int cutoff = 5,
+		unsigned int toBeIgnored = 1>
+void quickSortBase(T a, unsigned int n, Comparator comparator,
+		PartitionMethod partition) {
+	recursionDepth = quickSortBase1<T, Comparator, PartitionMethod, optimize,
+			cutoff, toBeIgnored>(a, n, comparator, partition);
+}
+template<class T, class Comparator, bool optimize = false, unsigned int cutoff =
+		5>
 void quickSort(T a, unsigned int n, Comparator comparator) {
 	typedef unsigned int (*Func)(T, unsigned int, Comparator);
-	Func func= partition;
-	quickSortBase<T, Comparator, Func, optimize, cutoff>(a, n, comparator, func);
+	Func func = partition;
+	quickSortBase<T, Comparator, Func, optimize, cutoff>(a, n, comparator,
+			func);
 }
 template<class T, class Comparator>
-void nonRecursiveQuickSort(T a, unsigned int n, Comparator comparator){
+void nonRecursiveQuickSort(T a, unsigned int n, Comparator comparator) {
 	if (n <= 1)
 		return;
 	unsigned int count = ceilLog2(n);
@@ -506,42 +540,50 @@ void nonRecursiveQuickSort(T a, unsigned int n, Comparator comparator){
 	int current = 0;
 	stacks[0] = 0;
 	stacks[1] = n;
-	while(current >= 0){
+	while (current >= 0) {
 		assert(current < 2 * count);
 		unsigned int s = stacks[current], e = stacks[current + 1];
 		n = e - s;
-		unsigned int j = partition(a + s,  e - s, comparator);
+		unsigned int j = partition(a + s, e - s, comparator);
 		current -= 2;
 		unsigned int n1 = 0;
 		unsigned int n2 = 0;
 		if (j > 1)
 			n1 = j;
 		if (j + 2 < n)
-				n2 = n - j - 1;
+			n2 = n - j - 1;
 
 		// This is import to make the stack size less than 2* log(n)
-		if(n1 >= n2){
-			if(n1 > 0){
+		if (n1 >= n2) {
+			if (n1 > 0) {
 				current += 2;
 				stacks[current] = s;
 				stacks[current + 1] = s + j;
 			}
-			if(n2 > 0){
+			if (n2 > 0) {
 				current += 2;
 				stacks[current] = s + j + 1;
 				stacks[current + 1] = e;
 			}
-		}else{
+		} else {
 			current += 2;
 			stacks[current] = s + j + 1;
 			stacks[current + 1] = e;
-			if(n1 > 0){
+			if (n1 > 0) {
 				current += 2;
 				stacks[current] = s;
 				stacks[current + 1] = s + j;
 			}
 		}
 	}
+}
+
+template<class T, class Comparator>
+void specialQuickSort(T a, unsigned int n, Comparator comparator) {
+	typedef unsigned int (*Func)(T, unsigned int, Comparator);
+	Func func = partition;
+	quickSortBase<T, Comparator, Func, false, 0, 5>(a, n, comparator, func);
+	insertionSort(a, n, comparator);
 }
 /**
  * the difference between this partition method and {@see partition} is that
@@ -550,8 +592,7 @@ void nonRecursiveQuickSort(T a, unsigned int n, Comparator comparator){
  * With a sentinel, bounds checking could be eliminated,
  */
 template<class T, class Comparator>
-unsigned int partitionWithSentinel(T a, unsigned int n,
-		Comparator comparator) {
+unsigned int partitionWithSentinel(T a, unsigned int n, Comparator comparator) {
 	if (n == 0)
 		return 0;
 	unsigned int i = 0, j = n;
@@ -577,7 +618,7 @@ void quickSortWithSentinal(T a, unsigned int n, Comparator comparator) {
 	unsigned int (*func)(T, unsigned int, Comparator) = partitionWithSentinel;
 	unsigned int index = 0;
 	for (unsigned int i = 1; i < n; ++i)
-		if (comparator(a[index], a[i])){
+		if (comparator(a[index], a[i])) {
 			index = i;
 			break;
 		}
@@ -592,12 +633,12 @@ void quickSortWithSentinal(T a, unsigned int n, Comparator comparator) {
  */
 template<class T, class Comparator>
 void median3Partition(T a, unsigned int n, Comparator comparator) {
-	if(n >= 3){
-		if(comparator(a[1], a[0]))
+	if (n >= 3) {
+		if (comparator(a[1], a[0]))
 			swap(a[1], a[0]);
-		if(comparator(a[n - 1], a[1]))
+		if (comparator(a[n - 1], a[1]))
 			swap(a[n - 1], a[1]);
-		if(comparator(a[1], a[0]))
+		if (comparator(a[1], a[0]))
 			swap(a[1], a[0]);
 	}
 	partitionWithSentinel(a, n, comparator);
@@ -605,6 +646,90 @@ void median3Partition(T a, unsigned int n, Comparator comparator) {
 template<class T, class Comparator>
 void median5Partition(T a, unsigned int, Comparator comparator) {
 
+}
+
+/**
+ * partition the array into three ranges, the first range contains the elements
+ * that are less than the elements in the second range, the second range contains elements
+ * that are all the same, the third range contains elements that are greater than the elements
+ * in the second range.
+ * @param a The array to be partitioned
+ * @param n Number of elements in the array
+ * @param comparator "less than" relation
+ */
+template<class T, class Comparator>
+std::pair<unsigned int, unsigned int> fast3wayPartition(T a, unsigned int n,
+		Comparator comparator) {
+	if (n > 1) {
+		unsigned int lo = 0, p = 1, i = 1, j = n - 1, q = n, hi = n;
+
+		//loop invariant
+		//[lo, p) = a[lo]
+		//[p, i) < a[lo]
+		//[q, hi) = a[lo]
+		//(j, q) > a[lo]
+		//(i, j) unchecked
+		while (i <= j) {
+			//loop invariant
+			//[lo, p) = a[lo]
+			//[p, i) < a[lo]
+			//(i, j) unchecked
+			while (!comparator(a[lo], a[i]) && i <= j) {
+				if (!comparator(a[i], a[lo])) {
+					if (i != p)
+						swap(a[i], a[p]);
+					++p;
+				}
+				++i;
+			}
+			//if the while is finished, then "i > j or a[lo] < a[i]
+			//loop invariant
+			//[q, hi) = a[lo]
+			//(j, q) > a[lo]
+			//(i, j) unchecked
+			while (!comparator(a[j], a[lo]) && i <= j) {
+				if (!comparator(a[lo], a[j])) {
+					--q;
+					if (j != q)
+						swap(a[j], a[q]);
+				}
+				--j;
+			}
+			//if the while is finished, then "i > j or a[j] < a[lo]
+			if (i > j)
+				break;
+			swap(a[i], a[j]);
+			++i;
+			--j;
+		}
+		while (lo < p) {
+			--p;
+			--i;
+			swap(a[p], a[i]);
+		}
+		while (q < hi) {
+			++j;
+			swap(a[j], a[q]);
+			++q;
+		}
+		return {i, j};
+	}
+	return {0, 0};
+}
+template<class T, class Comparator>
+void fast3wayQuickSort(T a, unsigned int n, Comparator comparator) {
+	if (n <= 1)
+		return;
+	std::pair<unsigned int, unsigned int> tmp = fast3wayPartition(a, n,
+			comparator);
+	if (tmp.first > 1) {
+		fast3wayQuickSort(a, tmp.first, comparator);
+	}
+
+	unsigned int start = tmp.second + 1;
+	if (start + 1 < n) {
+		fast3wayQuickSort(a + start, n - start, comparator);
+	}
 }
 /**
  * This class is for calculate the array accesses in each iteration of one increment
@@ -970,11 +1095,11 @@ public:
 	}
 };
 int validateSortAlgorithms(int argc, char *argv[]) {
-	const unsigned int count = 10;
+	const unsigned int count = 30;
 	unsigned int values[count];
 	unsigned int toBeSorted[count];
 	unsigned int output[count];
-	unsigned int maxValue = 2 * count;
+	unsigned int maxValue = count / 5;
 	randUInts(values, values + count, maxValue);
 
 	copy(values, values + count, toBeSorted);
@@ -1013,6 +1138,9 @@ int validateSortAlgorithms(int argc, char *argv[]) {
 	nonRecursiveQuickSort(toBeSorted, count, std::less<unsigned int>());
 	assert(isSorted(toBeSorted, count, std::less<unsigned int>()));
 
+	copy(values, values + count, toBeSorted);
+	fast3wayQuickSort(toBeSorted, count, std::less<unsigned int>());
+	assert(isSorted(toBeSorted, count, std::less<unsigned int>()));
 	return 0;
 }
 int doublingTestForSorts(int argc, char *argv[]) {
@@ -1500,7 +1628,7 @@ public:
 template<int N>
 class MergeSortCompare {
 	unsigned int start = 100;
-	bool measureTime = true;
+	bool measureTime = false;
 public:
 	static void generate(unsigned int *values, unsigned int count) {
 		randUInts(values, values + count, 2 * count);
@@ -1645,21 +1773,21 @@ public:
 			duration = clock() - duration;
 			switch (method % 3) {
 			case 0:
-				result.values[i] = duration;// + 0.01;
+				result.values[i] = duration;	// + 0.01;
 				break;
 			case 1:
-				result.values[i] = accessCounter;// + 0.01;
+				result.values[i] = accessCounter;	// + 0.01;
 				break;
 			default:
-				result.values[i] = compareCounter;// + 0.01;
+				result.values[i] = compareCounter;	// + 0.01;
 				break;
 			}
 			//assert(isSorted(toBeSorted, start, lessThan));
 		}
-		for(size_t i = 1;i < N;++ i){
-			result.values[i]  = (result.values[i] + 1e-8) / (result.values[0] + 1e-8);
-		}
-		result.values[0] = 1;
+		//for(size_t i = 1;i < N;++ i){
+		//	result.values[i]  = (result.values[i] + 1e-8) / (result.values[0] + 1e-8);
+		//}
+		//result.values[0] = 1;
 		start *= 1.01;
 		//start += 10;
 		return result;
@@ -1672,10 +1800,11 @@ protected:
 	}
 	TTuple<N, Func> funcs;
 };
-class QuickSortCompare1: public QuickSortCompare<3> {
+class QuickSortCompare1: public QuickSortCompare<4> {
 public:
 	QuickSortCompare1(unsigned int method = 0) {
-		Func tmps[3] = { quickSort, quickSortWithSentinal, nonRecursiveQuickSort};
+		Func tmps[4] = { quickSort, quickSortWithSentinal,
+				nonRecursiveQuickSort, specialQuickSort };
 		set(tmps);
 		this->method = method;
 	}
@@ -1683,8 +1812,35 @@ public:
 class QuickSortCompare2: public QuickSortCompare<4> {
 public:
 	QuickSortCompare2(unsigned int method = 0) {
-		Func tmps[4] = {quickSort, quickSort<Array, LessThan, true, 5>,
-				quickSort<Array, LessThan, true, 10>, quickSort<Array, LessThan, true, 15>};
+		Func tmps[4] = { quickSort<Array, LessThan, true, 5>, quickSort<Array,
+				LessThan, true, 8>, quickSort<Array, LessThan, true, 10>,
+				quickSort<Array, LessThan, true, 15> };
+		set(tmps);
+		this->method = method;
+	}
+};
+template<class T, class Comparator>
+unsigned int randPartition(T a, unsigned int n, Comparator comparator) {
+	unsigned int index = rand() % n;
+	std::swap(a[0], a[index]);
+	return partition(a, n, comparator);
+}
+template<class T, class Comparator>
+void randShuffleSort(T a, unsigned int n, Comparator comparator) {
+	random_shuffle(a, a + n);
+	return quickSort(a, n, comparator);
+}
+template<class T, class Comparator>
+void randPartitionSort(T a, unsigned int n, Comparator comparator) {
+	typedef unsigned int (*Func)(T, unsigned int, Comparator);
+	Func func = randPartition;
+	quickSortBase<T, Comparator, Func, false, 5>(a, n, comparator, func);
+
+}
+class QuickSortCompare3: public QuickSortCompare<2> {
+public:
+	QuickSortCompare3(unsigned int method = 0) {
+		Func tmps[2] = { randShuffleSort, randPartitionSort, };
 		set(tmps);
 		this->method = method;
 	}
@@ -1692,7 +1848,27 @@ public:
 template<class T, int N>
 thread_local RunningTimePlotter<T, N> *RunningTimePlotter<T, N>::instance =
 		nullptr;
+class RecursionDepth {
+	unsigned int start = 100;
+public:
+	TTuple<2> operator()() {
+		vector<unsigned int> values;
+		unsigned int tmpDepth = 0;
+		unsigned int count = start;
+		for (unsigned int i = 0; i < 10; ++i) {
+			randUInts(values, count, count * 2);
 
+			::recursionDepth = 0;
+			quickSort(&values[0], count, std::less<unsigned int>());
+			tmpDepth += recursionDepth;
+		}
+		start *= 1.01;
+		auto expected = 4 * log(count), average = tmpDepth / 10.0;
+		cout << "expected : " << expected << ", actual : " << average
+				<< ", ratio : " << average / expected << endl;
+		return {average, expected};
+	}
+};
 int testPlotting(int argc, char *argv[]) {
 	//InsertionSortAndSelectionSortAnimation test;
 	//ShellSortTraces test;
@@ -1738,13 +1914,13 @@ int testPlotting(int argc, char *argv[]) {
 //										0.6, 0.6, 0.0,
 //										0.7, 0.7, 0.7,
 //			});
-//	DifferentMergeCompare tmp;
-//	RunningTimePlotter<DifferentMergeCompare, 3> test(tmp, { 1.0, 0.0, 0.0, 0.0,
-//			1.0, 0.0, 1.0, 1.0, 0.0, });
+	QuickSortCompare3 tmp(2);
+	RunningTimePlotter<QuickSortCompare3, 2> test(tmp, { 1.0, 0.0, 0.0, 0.0,
+			1.0, 0.0, });
 
-	QuickSortCompare2 tmp(2);
-			RunningTimePlotter<QuickSortCompare2, 4> test(tmp, { 1.0, 0.0, 0.0, 0.0,
-						1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0});
+	//RecursionDepth tmp;
+	//RunningTimePlotter<RecursionDepth, 2> test(tmp, { 1.0, 0.0, 0.0, 0.0, 1.0,
+	//		0.0, });
 	return test.run(argc, argv);
 }
 
