@@ -26,6 +26,8 @@
 #include <map>
 #include <chrono>
 #include <tuple>
+#include <queue>
+#include <iterator>
 #include "common.h"
 using namespace std;
 /**
@@ -66,7 +68,7 @@ public:
 		return val != array.val;
 	}
 	int operator-(AccessCountedArray array) {
-			return val - array.val;
+		return val - array.val;
 	}
 	operator T*() {
 		return val;
@@ -674,7 +676,7 @@ std::pair<unsigned int, unsigned int> fast3wayPartition(T a, unsigned int n,
 			//[lo, p) = a[lo]
 			//[p, i) < a[lo]
 			//(i, j) unchecked
-			while (!comparator(a[lo], a[i]) && i <= j) {
+			while (i <= j && !comparator(a[lo], a[i])) {
 				if (!comparator(a[i], a[lo])) {
 					if (i != p)
 						swap(a[i], a[p]);
@@ -687,7 +689,7 @@ std::pair<unsigned int, unsigned int> fast3wayPartition(T a, unsigned int n,
 			//[q, hi) = a[lo]
 			//(j, q) > a[lo]
 			//(i, j) unchecked
-			while (!comparator(a[j], a[lo]) && i <= j) {
+			while (i <= j && !comparator(a[j], a[lo])) {
 				if (!comparator(a[lo], a[j])) {
 					--q;
 					if (j != q)
@@ -789,7 +791,7 @@ class InsertionSortAndSelectionSortAnimation {
 			friend void swap(UInt va, UInt vb) {
 				if (&va != &vb) {
 					if (!va.signalData->done) {
-						std::unique_lock<std::mutex> lk(va.signalData->m);
+						std::unique_lock < std::mutex > lk(va.signalData->m);
 						va.signalData->cv.wait(lk,
 								[va] {return va.signalData->isReady;});
 						va.signalData->isReady = false;
@@ -877,12 +879,12 @@ class InsertionSortAndSelectionSortAnimation {
 		instance->signalData.done = true;
 	}
 	void notify() {
-		std::lock_guard<std::mutex> lk(signalData.m);
+		std::lock_guard < std::mutex > lk(signalData.m);
 		signalData.cv.notify_one();
 		signalData.isReady = true;
 	}
 	void done() {
-		std::lock_guard<std::mutex> lk(signalData.m);
+		std::lock_guard < std::mutex > lk(signalData.m);
 		signalData.cv.notify_one();
 		signalData.isReady = true;
 		signalData.done = true;
@@ -1247,7 +1249,7 @@ class RunningTimePlotter {
 		while (!isDone) {
 			TTuple<N> tmp = val();
 			{
-				std::lock_guard<std::mutex> lk(m);
+				std::lock_guard < std::mutex > lk(m);
 				for (size_t i = 0; i < values.size(); ++i) {
 					vector<double>& v = values[i];
 					unsigned int& count = counts[i];
@@ -1290,7 +1292,7 @@ public:
 	void show() {
 		glClear(GL_COLOR_BUFFER_BIT);
 		{
-			std::lock_guard<std::mutex> lk(m);
+			std::lock_guard < std::mutex > lk(m);
 			double maxValue = getMaxValue();
 			glPointSize(3.0);
 			for (size_t i = 0; i < values.size(); ++i) {
@@ -1754,8 +1756,14 @@ public:
 	typedef CountedLessThan<unsigned int> LessThan;
 	typedef void (*Func)(Array, unsigned int, LessThan);
 	TTuple<N> operator()() {
-		unsigned int origin[start];
-		unsigned int toBeSorted[start];
+		//dangerous!!! platform dependent, if "start" is larger than the stacck size limit
+		//of the platform, program will crash.
+		//unsigned int origin[start];
+		//unsigned int toBeSorted[start];
+		vector<unsigned int> originVec(start, 0);
+		vector<unsigned int> toBeSortedVec(start, 0);
+		unsigned int *origin = &originVec[0];
+		unsigned int *toBeSorted = &toBeSortedVec[0];
 		clock_t duration = 0;
 		unsigned long long accessCounter = 0, compareCounter = 0;
 		Func *func = funcs.values;
@@ -1869,6 +1877,26 @@ public:
 		return {average, expected};
 	}
 };
+class DebugRunningTime {
+	unsigned int start = 0;
+	unsigned int N = 10000;
+public:
+	TTuple<2> operator()() {
+		unsigned int counts[N];
+		static std::default_random_engine rd;
+		static std::uniform_int_distribution<unsigned int> discrete(0, N);
+		memset(counts, 0, sizeof(counts));
+		start += 10;
+		for (unsigned int i = 0; i < start; ++i)
+			++counts[discrete(rd)];
+		double expected = (1 - 1 / exp(start * 1.0 / N));
+		double count = 0;
+		for (unsigned int i = 0; i < N; ++i)
+			if (counts[i] != 0)
+				count += 1;
+		return {expected, count / N};
+	}
+};
 int testPlotting(int argc, char *argv[]) {
 	//InsertionSortAndSelectionSortAnimation test;
 	//ShellSortTraces test;
@@ -1899,6 +1927,9 @@ int testPlotting(int argc, char *argv[]) {
 //	SpecialDistributions tmp(1);
 //	RunningTimePlotter<SpecialDistributions, 3> test(tmp, { 1.0, 0.0, 0.0, 0.0,
 //			1.0, 0.0, 1.0, 1.0, 0.0 });
+	DebugRunningTime tmp;
+	RunningTimePlotter<DebugRunningTime, 2> test(tmp, { 1.0, 0.0, 0.0, 0.0, 1.0,
+			0.0 });
 //	return test.run(argc, argv);
 	//SortingTime tmp(6);
 	//RunningTimePlotter<SortingTime, 2> test(tmp,
@@ -1914,9 +1945,9 @@ int testPlotting(int argc, char *argv[]) {
 //										0.6, 0.6, 0.0,
 //										0.7, 0.7, 0.7,
 //			});
-	QuickSortCompare3 tmp(2);
-	RunningTimePlotter<QuickSortCompare3, 2> test(tmp, { 1.0, 0.0, 0.0, 0.0,
-			1.0, 0.0, });
+//	QuickSortCompare3 tmp(1);
+//	RunningTimePlotter<QuickSortCompare3, 2> test(tmp, { 1.0, 0.0, 0.0, 0.0,
+//			1.0, 0.0, });
 
 	//RecursionDepth tmp;
 	//RunningTimePlotter<RecursionDepth, 2> test(tmp, { 1.0, 0.0, 0.0, 0.0, 1.0,
@@ -2319,7 +2350,155 @@ struct LinkedListTest {
 		return 0;
 	}
 };
-int main(int argc, char *argv[]) {
+template<class Algorithm>
+void sortRank(unsigned int n, unsigned int *r, Algorithm algorithm) {
+	std::vector<unsigned int> indices(n, 0);
+	for (unsigned int i = 0; i < n; ++i)
+		indices[i] = i;
+	algorithm(&indices[0], n);
+	for (unsigned int i = 0; i < n; ++i)
+		r[indices[i]] = i;
+}
+template<typename T>
+class SortRank {
+	T items;
+	T aux;
+	unsigned int method;
+public:
+	SortRank(T items, T aux, unsigned int method) :
+			items(items), aux(aux), method(method) {
+	}
+	void operator()(unsigned int *values, unsigned int n) {
+		auto func =
+				[&](unsigned int i, unsigned int j) {return this->items[i] < this->items[j];};
+		switch (method % 9) {
+		case 0:
+			selectionSort(values, n, func);
+			return;
+		case 1:
+			insertionSort(values, n, func);
+			return;
+		case 2:
+			shellSort(values, n, func);
+			return;
+		case 3:
+			quickSort(values, n, func);
+			return;
+		case 4:
+			fast3wayQuickSort(values, n, func);
+			return;
+		case 5:
+			mergeSort(&values[0], n, &aux[0], func);
+			return;
+		case 6:
+			bottomUpMergeSort(&values[0], n, &aux[0], func);
+			return;
+		case 7:
+			naturalMergeSort(&values[0], n, &aux[0], func);
+			return;
+		case 8: {
+			auto func1 = [&](unsigned int i, unsigned int j) {return this->items[j] < this->items[i];};
+			std::priority_queue<unsigned int, vector<unsigned int>, decltype(func1)> pq(&values[0], &values[0] + n, func1);
+			unsigned int i = 0;
+			while(!pq.empty()){
+				values[i] = pq.top();
+				pq.pop();
+				++ i;
+			}
+			return ;
+		}
+		}
+	}
+};
+
+int testRank(int argc, char *argv[]) {
+	typedef vector<unsigned int> UVec;
+	unsigned int count = 8;
+	UVec values(count, 0);
+	UVec tmp(count, 0), result(count, 0);
+	SortRank<UVec> ranks[] = { { values, tmp, 0 }, { values, tmp, 1 }, { values,
+			tmp, 2 }, { values, tmp, 3 }, { values, tmp, 4 },
+			{ values, tmp, 5 }, { values, tmp, 6 }, { values, tmp, 7 }, { values, tmp, 8 },};
+	const char *descs[] = { "selectionSort", "insertionSort", "shellSort",
+			"quickSort", "fast3wayQuickSort", "mergeSort", "bottomUpMergeSort",
+			"naturalMergeSort", "heap sort"};
+	for (unsigned int i = 0; i < (sizeof(ranks) / sizeof(*ranks)); ++i) {
+		sortRank(count, &result[0], ranks[i]);
+		cout << "sort algorithm : " << descs[i] << endl;
+		std::copy(result.begin(), result.end(),
+				std::ostream_iterator<unsigned int>(cout, " "));
+		cout << endl;
+	}
+	return 0;
+}
+template<class T, class Comparator>
+int kendallTauDistance(T items1, T items2, unsigned int n,
+		Comparator comparator) {
+	typedef vector<unsigned int> UVec;
+	UVec orders(n, 0);
+	UVec ranks(n, 0);
+	UVec indices(n, 0);
+	UVec aux(n, 0);
+	for (unsigned int i = 0; i < n; ++i) {
+		orders[i] = i;
+		indices[i] = i;
+		aux[i] = i;
+	}
+	fast3wayQuickSort(&orders[0], n,
+			[&](unsigned int i, unsigned int j) {return items1[i] < items1[j];});
+	fast3wayQuickSort(&aux[0], n,
+			[&](unsigned int i, unsigned int j) {return items2[i] < items2[j];});
+	for (unsigned int i = 0; i < n; ++i)
+		ranks[aux[i]] = i;
+	unsigned int inversions =
+			countInversions(&indices[0], n, &aux[0],
+					[&](unsigned int i, unsigned int j) {
+						if(!comparator(items2[i], items2[j]) && !comparator(items2[j], items2[i]))
+						return false;
+						return orders[ranks[i]] < orders[ranks[j]];
+					});
+	////////assertions///////////////
+	for (unsigned int i = 0; i < n; ++i) {
+		assert(
+				!comparator(items1[i], items2[aux[i]])
+						&& !comparator(items2[aux[i]], items1[i]));
+	}
+	////////////////////////////////
+	return inversions;
+}
+void testKendallTauDistance(unsigned int *values1, unsigned int *values2,
+		unsigned int count) {
+	std::random_shuffle(values1, values1 + count);
+	std::random_shuffle(values2, values2 + count);
+	cout << "sequence 1 :" << endl;
+	std::copy(values1, values1 + count,
+			std::ostream_iterator<unsigned int>(cout, " "));
+	cout << "\nsequence 2 :" << endl;
+	std::copy(values2, values2 + count,
+			std::ostream_iterator<unsigned int>(cout, " "));
+	cout << "\ninversions : "
+			<< kendallTauDistance(values1, values2, count,
+					std::less<unsigned int>()) << endl;
+}
+int testKendallTauDistance(int argc, char *argv[]) {
+	unsigned int count = 8;
+	unsigned int values1[count];
+	unsigned int values2[count];
+	for (unsigned int i = 0; i < count; ++i) {
+		values1[i] = i;
+		values2[i] = i;
+	}
+	testKendallTauDistance(values1, values2, count);
+	for (unsigned int i = 0; i < count; ++i) {
+		values1[i] = i % 3;
+		values2[i] = i % 3;
+	}
+	testKendallTauDistance(values1, values2, count);
+	return 0;
+}
+
+int ext21Main(int argc, char *argv[]) {
 	validateSortAlgorithms(argc, argv);
-	return testPlotting(argc, argv);
+	return testRank(argc, argv);
+	//return testPlotting(argc, argv);
 }
