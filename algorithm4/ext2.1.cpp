@@ -1924,12 +1924,12 @@ int testPlotting(int argc, char *argv[]) {
 //					1.0, 1.0, 0.0,
 //					1.0, 0.0, 0.0,
 //			});
-//	SpecialDistributions tmp(1);
-//	RunningTimePlotter<SpecialDistributions, 3> test(tmp, { 1.0, 0.0, 0.0, 0.0,
-//			1.0, 0.0, 1.0, 1.0, 0.0 });
-	DebugRunningTime tmp;
-	RunningTimePlotter<DebugRunningTime, 2> test(tmp, { 1.0, 0.0, 0.0, 0.0, 1.0,
-			0.0 });
+	SpecialDistributions tmp(1);
+	RunningTimePlotter<SpecialDistributions, 3> test(tmp, { 1.0, 0.0, 0.0, 0.0,
+			1.0, 0.0, 1.0, 1.0, 0.0 });
+//	DebugRunningTime tmp;
+//	RunningTimePlotter<DebugRunningTime, 2> test(tmp, { 1.0, 0.0, 0.0, 0.0, 1.0,
+//			0.0 });
 //	return test.run(argc, argv);
 	//SortingTime tmp(6);
 	//RunningTimePlotter<SortingTime, 2> test(tmp,
@@ -2427,6 +2427,7 @@ int testRank(int argc, char *argv[]) {
 		cout << "sort algorithm : " << descs[i] << endl;
 		std::copy(result.begin(), result.end(),
 				std::ostream_iterator<unsigned int>(cout, " "));
+
 		cout << endl;
 	}
 	return 0;
@@ -2499,6 +2500,6 @@ int testKendallTauDistance(int argc, char *argv[]) {
 
 int ext21Main(int argc, char *argv[]) {
 	validateSortAlgorithms(argc, argv);
-	return testRank(argc, argv);
-	//return testPlotting(argc, argv);
+	//return testRank(argc, argv);
+	return testPlotting(argc, argv);
 }
