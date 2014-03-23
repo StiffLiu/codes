@@ -28,6 +28,7 @@
 #include <tuple>
 #include <queue>
 #include <iterator>
+#include <cstring>
 #include "common.h"
 using namespace std;
 /**

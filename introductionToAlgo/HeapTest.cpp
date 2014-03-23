@@ -41,17 +41,20 @@ protected:
 	 *  We need to  swap values if necessary, to revalidates the two properties mentioned above.
 	 *  We do this iteratively until we reach the root node.
 	 */
-	void promote(size_t index) {
+	size_t promote(size_t index) {
 		if (index <= 0)
-			return;
+			return index;
 		size_t parent = (index - 1) / d;
 		while (parent > 0 && comparator(data[index], data[parent])) {
 			swap(data[index], data[parent]);
 			index = parent;
 			parent = (index - 1) / d;
 		}
-		if (parent == 0 && comparator(data[index], data[parent]))
+		if (parent == 0 && comparator(data[index], data[parent])){
 			swap(data[index], data[parent]);
+			index = parent;
+		}
+		return index;
 	}
 public:
 	typedef T DataType;
@@ -86,7 +89,7 @@ public:
 			heapify(i);
 		}
 	}
-	virtual void heapify(size_t index) {
+	virtual size_t heapify(size_t index) {
 		while (index < s) {
 			size_t smallest = index;
 			size_t start = d * index + 1;
@@ -100,6 +103,7 @@ public:
 			swap(data[index], data[smallest]);
 			index = smallest;
 		}
+		return index;
 	}
 	/*
 	 * get and remove the minimum value from this heap
@@ -139,25 +143,26 @@ public:
 	/*
 	 * set the value of the node at a given index
 	 */
-	void set(size_t index, const T& item) {
+	size_t set(size_t index, const T& item) {
 		if (comparator(item, data[index])) {
 			data[index] = item;
-			promote(index);
+			return promote(index);
 		} else if (comparator(data[index], item)) {
 			data[index] = item;
-			heapify(index);
+			return heapify(index);
 		} else {
 			data[index] = item;
 		}
+		return index;
 	}
 
 	/*
 	 * add one item into the heap
 	 */
-	void add(const T& item) {
+	size_t add(const T& item) {
 		data.push_back(item);
 		++s;
-		promote(s - 1);
+		return promote(s - 1);
 	}
 
 	/*
@@ -199,7 +204,7 @@ public:
 	BinaryHeap(ForwardIterator begin, ForwardIterator end) :
 			SuperClass(2, begin, end) {
 	}
-	void heapify(size_t index) {
+	size_t heapify(size_t index) {
 		size_t s = SuperClass::size();
 		Seq& data = SuperClass::data;
 		while (index < s) {
@@ -215,6 +220,7 @@ public:
 			swap(data[index], data[smallest]);
 			index = smallest;
 		}
+		return index;
 	}
 };
 template<class T>
@@ -341,4 +347,10 @@ int test22(int argc, char *argv[]) {
 	copy(output.begin(), output.end(), ostream_iterator<int>(cout, " "));
 	cout << endl;
 	return 0;
+}
+template<class Heap>
+class TestHeap{
+	
+};
+int compareHeap(int argc, char *argv[]){
 }
