@@ -1,2 +1,2 @@
-g++ -O0 -g3 -Wall -I /development/source/codes/algorithm4 -fmessage-length=0 -pthread -std=c++11 -Wl,--no-as-needed -lglut -lGLU -lGL -lGLEW my_heap_test.cpp main.cpp -o main
+g++ -O0 -g3 -Wall -I /development/source/codes/algorithm4 -fmessage-length=0 -pthread -std=c++11 -Wl,--no-as-needed -lglut -lGLU -lGL -lGLEW my_heap_performance_test.cpp my_test_base.cpp -o main
 

@@ -9,7 +9,8 @@ class TwoDPlot{
 public:
 	virtual void show() = 0;
 	virtual int run(int argc, char *argv[]);
-	virtual ~TwoDPlotter() = 0;
+	virtual ~TwoDPlot(){
+	}
 	static void drawPoints(double *points, double *colors, unsigned int n);
 	static void drawPoints(double *points, unsigned int n, double *color);
 	static void drawPath(double *vertices, double *colors, unsigned int n);
@@ -19,28 +20,43 @@ protected:
 	virtual void init(){
 	}
 };
-template<class Collector>
-class StatPlot: public TwoDPlot{
-	std::vector<std::vector<double> > graphs;
-	std::vector<double> colors;
-	Collector collector;
-	std::thread collectingThread;
-	std::mutex m;
-	unsigned int interval = 1000;
-	static void collecting(StatPlot *plot);	
+class StatPlotBase : public TwoDPlot{
 	typedef TwoDPlot Super;
 public:
-	StatPlot(unsigned int numGraphs, const Collector& collector, 
-		double *colors = nullptr) : graphs(numGraphs), 
-		colors(colors, colors + 3 * numGraphs), collector(collector){
+	StatPlotBase(unsigned int numGraphs, double *colors = nullptr)
+	       : graphs(numGraphs), colors(colors, 
+		(colors == nullptr ? colors : colors + 3 * numGraphs)){
 	}
 	size_t getNumGraphs(){
 		return graphs.size();
 	}
-	override void show();
-	override int run(int argc, char *argv[]);
+	void show() override;
+	~StatPlotBase() ;
 protected:
-	override void init();
-}
+	std::vector<std::vector<double> > graphs;
+	std::vector<double> colors;
+	std::thread collectingThread;
+	std::mutex m;
+	unsigned int maxNumPoints = 1000;
+	unsigned int interval = 10;
+	static void collecting(StatPlotBase *plot);	
+	virtual bool collect(double *values){
+		return false;
+	}
 };
+template<class Collector>
+class StatPlot : public StatPlotBase{
+	Collector collector;
+protected:
+	StatPlot(unsigned int numGraphs, const Collector& collector, 
+		double *colors = nullptr) : StatPlotBase(numGraphs, colors), collector(collector){
+	}
+	void init() override{
+		collectingThread = std::thread(collecting, this);
+	}
+	bool collect(double *values) override{
+		return collector(values);
+	}
+};
+}
 #endif //MY_LIB_MY_TEST_BASE_H     

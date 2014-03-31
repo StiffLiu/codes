@@ -1,9 +1,17 @@
 #include "my_test_base.h"
 #include <algorithm>
+#include <GL/glew.h>
+#include <GL/gl.h>
 #include <GL/glut.h>
-#include <float>
+#include <GL/glext.h>
+#include <cfloat>
+#include <iostream>
+#include <condition_variable>
+#include <chrono>
+
 namespace{
-thread_local TwoDPlot *instance = nullptr;
+using namespace my_lib;
+TwoDPlot *instance = nullptr;
 void openGLInit() {
 	glEnableClientState(GL_COLOR_ARRAY);
 	glEnableClientState(GL_VERTEX_ARRAY);
@@ -11,7 +19,7 @@ void openGLInit() {
 	glColor3f(0.314, 0.314, 0.000); 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glPointSize(2.0);
+	glPointSize(5.0);
 	gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
 }
 void drawArrays(double *points, 
@@ -19,18 +27,28 @@ void drawArrays(double *points,
 	if(points == nullptr || n <= 0)
 		return;
 
-	GLint savedBinding = 0;
-	glGet(GL_ARRAY_BUFFER_BINDING, &savedBinding);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	//GLint savedBinding = 0;
+	//glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &savedBinding);
+	//glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glVertexPointer(2, GL_DOUBLE, 0, points);
-	glColorPointer(3, GL_DOUBLE, colors);
+	if(colors != nullptr)
+		glColorPointer(3, GL_DOUBLE, 0, colors);
 	glDrawArrays(mode, 0, n);
-	glBindBuffer(GL_ARRAY_BUFFER, savedBinding);	
+	//glBindBuffer(GL_ARRAY_BUFFER, savedBinding);	
 
 }
 void display(){
 	if(instance != nullptr)
-		instance->draw();
+		instance->show();
+}
+
+std::mutex m;
+std::condition_variable cv;
+void idleFunc(){
+	std::unique_lock<std::mutex> lk(m);
+	cv.wait(lk, []{return true;});
+	lk.unlock();
+	glutPostRedisplay();
 }
 }
 namespace my_lib{
@@ -42,11 +60,11 @@ int TwoDPlot::run(int argc, char *argv[]){
 	glutInitWindowPosition(0, 0);
 	glutCreateWindow("my test");
 	glutDisplayFunc(display);
+	glutIdleFunc(idleFunc);
 	openGLInit();
 	instance = this;	
 	init();
 	glutMainLoop();
-	instance = nullptr;
 	return 0;
 }
 void TwoDPlot::drawPoints(double *points, 
@@ -61,58 +79,76 @@ void TwoDPlot::drawPoints(double *points,
 }
 void TwoDPlot::drawPath(double *vertices,
 	double *colors, unsigned int n){
-	drawArrays(points, colors, n, GL_LINE_STRIP);
+	drawArrays(vertices, colors, n, GL_LINE_STRIP);
 }
 void TwoDPlot::drawPath(double *vertices,
 	unsigned int n, double *color){
 	if(color != nullptr)
 		glColor3d(color[0], color[1], color[2]);
-	drawArrays(points, nullptr, n, GL_LINE_STRIP);
+	drawArrays(vertices, nullptr, n, GL_LINE_STRIP);
 }
 void TwoDPlot::drawAxis(double minX, double maxX,
 	double minY, double maxY){
-	glBegin(GL_LINES);
-	glVertex2f(minX, 0);
-	glVertex2f(maxX, 0);	
-	glVertex2f(0, minY);
-	glVertex2f(0, maxY);
+	glBegin(GL_LINE_STRIP);
+	glVertex2f(minX, maxY);
+	glVertex2f(minX, minY);	
+	glVertex2f(maxX, minY);
 	glEnd();
 }
 /*****************************************************/
-void StatPlot::collecting(StatPlot *plot){
+void StatPlotBase::collecting(StatPlotBase *plot){
+	auto& graphs = plot->graphs;
 	std::vector<double> values(2 * graphs.size());
 	while(instance == plot){
-		std::lock_guard<std::mutex> lg(plot->m);
-		if(collector(&values[0], values.size())){
-			for(size_t i = 0;size_t i < graphs.size();++ i){
+		if(plot->collect(&values[0])){
+			std::lock_guard<std::mutex> lk(plot->m);
+			for(size_t i = 0;i < graphs.size();++ i){
 				std::vector<double>& points = graphs[i];
 				size_t index = 2 * i;
-				points.erase(points.begin());
-				points.erase(points.begin());
+				if(points.size() > plot->maxNumPoints){
+					auto pos = points.begin();
+					auto end = pos + 2;
+					points.erase(pos, end);
+				}
 				points.push_back(values[index]);
 				points.push_back(values[index + 1]);
 			}
-		}			
+			cv.notify_one();
+		}
+		std::chrono::milliseconds dura(plot->interval);
+		std::this_thread::sleep_for(dura);
 	}
 }
-void StatPlot::show(){
+void StatPlotBase::show(){
 	glClear(GL_COLOR_BUFFER_BIT);
 	std::lock_guard<std::mutex> lg(m);
-	double xMin = DBL_MAX, xMax = -DBL_MAX, yMin = DBL_MAX, yMax = DBL_MIN; 
-	for(size_t i = 0;size_t i < graphs.size();++ i){
+	double xMin = DBL_MAX, xMax = -DBL_MAX, yMin = DBL_MAX, yMax = -DBL_MAX; 
+	for(size_t i = 0;i < graphs.size();++ i){
 		std::vector<double>& points = graphs[i];
-		for(size_t j = 0;j < points.size();++ j){
-			size_t index = 2 * j;
-			xMin = std::min(xMin, points[index]);
-			xMax = std::max(xMin, points[index]);
-			yMin = std::min(yMin, points[index + 1]);
-			yMax = std::max(yMax, points[index + 1]);
+		for(size_t j = 0;j < points.size();j += 2){
+			xMin = std::min(xMin, points[j]);
+			xMax = std::max(xMax, points[j]);
+			yMin = std::min(yMin, points[j + 1]);
+			yMax = std::max(yMax, points[j + 1]);
 		}
 	}
+	const double eps = 1e-3;
+	if(xMin == DBL_MAX)
+		xMin = 0.0;
+	if(yMin == DBL_MAX)
+		yMin = 0.0;
+	if(xMin + eps > xMax)
+		xMax = xMin + eps;
+	if(yMin + eps > yMax)
+		yMax = yMin + eps;
+	
+	double deltaX = xMax - xMin;
+	double deltaY = yMax - yMin;
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluOrtho2D(xMin, xMax, yMin, yMax);
-	for(size_t i = 0;size_t i < graphs.size();++ i){
+	gluOrtho2D(xMin - 0.01 * deltaX, xMax + 0.01 * deltaX, 
+		yMin - 0.01 * deltaY, yMax + 0.01 * deltaY);
+	for(size_t i = 0;i < graphs.size();++ i){
 		std::vector<double>& points = graphs[i];
 		if(!points.empty()){
 			double *color = nullptr;
@@ -124,11 +160,9 @@ void StatPlot::show(){
 	drawAxis(xMin, xMax, yMin, yMax);
 	glFlush();
 }
-int StatPlot::run(int argc, char *argv[]){
-	Super::run(argc, argv);
+StatPlotBase::~StatPlotBase(){
+	instance = nullptr;
 	collectingThread.join();
-}
-void StatPlot::init(){
-	collectingThread = std::thread(collecting, this);
+	std::cout << "exited" << std::endl;	
 }
 }
