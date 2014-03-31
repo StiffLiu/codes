@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <vector>
 #include <cstdlib>
+#include "my_access_counted_object.h"
+
+#define ARSIZE(a) (sizeof(a) / (sizeof *(a)))
 
 class TestPlot : public my_lib::StatPlot<TestPlot&>{
 	typedef my_lib::StatPlot<TestPlot&> Super;
@@ -35,8 +38,67 @@ public:
 		return true;
 	}
 };
+struct NotUseFloyd : public my_lib::NaryHeapAlgorithmTraits{
+	static const bool useFloydMethod = false;
+};
+class DiffNaryHeapCompare : public my_lib::StatPlot<DiffNaryHeapCompare&>{
+	typedef my_lib::StatPlot<DiffNaryHeapCompare&> Super;
+	unsigned int start = 100;
+	unsigned int dimensions[4] = {2, 3, 5, 7};
+public:
+	DiffNaryHeapCompare(): Super(2 * ARSIZE(dimensions), *this){
+		double c[]={
+			1.0, 0.0, 0.0,
+			0.0, 1.0, 0.0,
+			0.0, 0.0, 1.0,
+			1.0, 1.0, 0.0,
+			
+			0.5, 0.0, 0.0,
+			0.0, 0.5, 0.0,
+			0.0, 0.0, 0.5,
+			0.5, 0.5, 0.0,
+		};
+		colors.assign(c, c + ARSIZE(c));
+	}
+	bool operator()(double *values){
+		using namespace my_lib;
+		std::vector<unsigned int> vals(start);
+		for(decltype(start) i = 0;i < start;++ i)
+			vals[i] = i;
+		std::random_shuffle(vals.begin(), vals.end());
+
+		typedef AccessCountedFunctor<unsigned int, 
+			std::less<unsigned int> > LessThan;
+		typedef NaryHeap<unsigned int, std::vector<unsigned int>,
+		       LessThan> Heap;	
+		auto n = ARSIZE(dimensions);
+		for(decltype(n) i = 0;i < n;++ i){
+			Heap heap(dimensions[i], vals.begin(), vals.end()); 
+			while(!heap.empty())
+				heap.pop();
+
+			auto index = 2 * i;
+			values[index] = start;
+			values[index + 1] = heap.getComparator().getCounter();
+		}	
+		typedef NaryHeap<unsigned int, std::vector<unsigned int>,
+		       LessThan, NotUseFloyd> HeapNotFloyd;	
+		for(decltype(n) i = 0;i < n;++ i){
+			HeapNotFloyd heap(dimensions[i], vals.begin(), 
+				vals.end()); 
+			while(!heap.empty())
+				heap.pop();
+
+			auto index = 2 * i + 8;
+			values[index] = start;
+			values[index + 1] = heap.getComparator().getCounter();
+		}
+		start += 10;
+		return true;
+	}
+};
 int main(int argc, char *argv[]){
-	TestPlot test;
+	DiffNaryHeapCompare test;
 	test.run(argc, argv);
 	return 0;
 }

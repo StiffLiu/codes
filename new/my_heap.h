@@ -373,6 +373,12 @@ public:
 	size_t size() const {
 		return s;
 	}
+	/**
+	 * @return The less than relation used by this heap.
+	 */
+	const Less& getComparator()const{
+		return comparator;
+	}
 };
 template<class T, class Seq = std::vector<T>, class Less = std::less<T> >
 class BinaryHeap: public NaryHeap<T, Seq, Less> {

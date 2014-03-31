@@ -15,7 +15,7 @@ protected:
 public:
 	AccessCountedObject(const Counter counter = Counter()) : counter(counter){
 	}
-	const Counter& getCounter(){
+	const Counter& getCounter()const{
 		return counter;
 	}
 };
@@ -30,12 +30,12 @@ public:
 	}
 	template<class Index>
 	auto operator[](Index index) ->decltype((array[index])){
-		++ counter;
+		++ Super::counter;
 		return array[index];
 	}
 	template<class Index>
 	auto operator[](Index index) const ->decltype((array[index])){
-		++ counter;
+		++ Super::counter;
 		return array[index];
 	}
 };
@@ -45,59 +45,59 @@ class AccessCountedFunctor : public AccessCountedObject<Counter>{
 protected:
 	Functor functor;
 public:
-	AccessCountedFunctor(const Counter& counter = Counter, const Functor& functor = Functor())
+	AccessCountedFunctor(const Counter& counter = Counter(), const Functor& functor = Functor())
 	       : Super(counter), functor(functor){
 	}
-	auto operator()()->decltype(functor()){
-		++ counter;
+	/*auto operator()(){
+		++ Super::counter;
 		return functor();
-	}
+	}*/
 	template<class T>
 	auto operator()(const T& val)->decltype(functor(val)){
-		++ counter;
+		++ Super::counter;
 		return functor(val);
 	}
 	template<class T1, class T2>
 	auto operator()(const T1& val1, const T2& val2)->decltype(functor(val1, val2)){
-		++ counter;
+		++ Super::counter;
 		return functor(val1, val2);
 	}
 	template<class T1, class T2, class T3>
 	auto operator()(const T1& val1, const T2& val2, const T3& val3)
 		->decltype(functor(val1, val2, val3)){
-		++ counter;
+		++ Super::counter;
 		return functor(val1, val2);
 	}
 	template<class T1, class T2, class T3, class T4>
 	auto operator()(const T1& val1, const T2& val2, const T3& val3, const T4& val4)
 		->decltype(functor(val1, val2, val3, val4)){
-		++ counter;
+		++ Super::counter;
 		return functor(val1, val2, val3, val4);
 	}
-	auto operator()()const ->decltype(functor()){
-		++ counter;
+	/*auto operator()()const{
+		++ Super::counter;
 		return functor();
-	}
+	}*/
 	template<class T>
 	auto operator()(const T& val)const ->decltype(functor(val)){
-		++ counter;
+		++ Super::counter;
 		return functor(val);
 	}
 	template<class T1, class T2>
 	auto operator()(const T1& val1, const T2& val2)const ->decltype(functor(val1, val2)){
-		++ counter;
+		++ Super::counter;
 		return functor(val1, val2);
 	}
 	template<class T1, class T2, class T3>
 	auto operator()(const T1& val1, const T2& val2, const T3& val3)const
 		->decltype(functor(val1, val2, val3)){
-		++ counter;
+		++ Super::counter;
 		return functor(val1, val2);
 	}
 	template<class T1, class T2, class T3, class T4>
 	auto operator()(const T1& val1, const T2& val2, const T3& val3, const T4& val4)const
 		->decltype(functor(val1, val2, val3, val4)){
-		++ counter;
+		++ Super::counter;
 		return functor(val1, val2, val3, val4);
 	}
 };

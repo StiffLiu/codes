@@ -19,7 +19,7 @@ void openGLInit() {
 	glColor3f(0.314, 0.314, 0.000); 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glPointSize(5.0);
+	glPointSize(4.0);
 	gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
 }
 void drawArrays(double *points, 
