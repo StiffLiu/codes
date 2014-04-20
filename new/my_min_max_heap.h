@@ -15,10 +15,13 @@ namespace my_lib{
  *  <li>Extract the maximum key from the heap.</li>
  *  <li>Remove the maximum key from the heap.</li>
  * 
- * this class implements the minimum heap data struct and has the following two properties:
- * 	1. it uses a balanced full n-ary tree, where a key is stored in each node.
- * 	2. the key in the parent node is not greater than the key in any of its children. 
- * it utilizes a container that has <i>random-access</i> ability.
+ * this class implements the min-max heap data struct and has the following three properties:
+ * 	1. it uses two balanced full n-ary trees, one is a min heap, the other is a max heap. 
+ * 		an index is stored in each node.
+ * 	2. the index in each node is a index to an array, where keys are stored in the array.
+ * 	2. the key referenced by the index in the parent node is not greater than(for min heap) or not 
+ * 		larger than(for max heap) the key referenced by the index in any of its children.
+ * it utilizes {@code vector} to repsent a balanced full n-ary tree, 
  * the indices of the children of the node with index {@var j} are :
  * 	<i>n * j + c, where 1 <= c <= d</i>
  *
@@ -29,7 +32,7 @@ namespace my_lib{
  * 
  * the index of a key is the index of the node which stores the key.
  *
- * the time complexity of the three operations mentioned above is o(lg(n)), where n
+ * the time complexity of the five operations mentioned above is O(lg(n)), where n
  * 	is the number of nodes in the heap.
  *
  * @param T Type of key stored in nodes of the heap.
@@ -43,12 +46,30 @@ protected:
 	 * The underlying random-access container used by the heap.
 	 */
 	Seq data;
+	/**
+	 * The key at index {@var i} in the sequence {@var data} is referenced by the node
+	 * in the min heap with index {@code indexToMinHeap[i]}. Thus we have the following :
+	 * {@code minHeap[indexToMinHeap[i]] == i} and 
+	 * {@code indexToMinHeap[minHeap[j]] == j}
+	 */
 	std::vector<size_t> indexToMinHeap;
+	/**
+	 * The key at index {@var i} in the sequence {@var data} is referenced by the node
+	 * in the max heap with index {@code indexToMaxheap[i]}. Thus we have the following :
+	 * {@code maxHeap[indexoToMaxHeap[i] == i} and
+	 * {@code indexToMaxHeap[maxHeap[j]] == j}
+	 */
 	std::vector<size_t> indexToMaxHeap;
+	/**
+	 * The min heap.
+	 */
 	std::vector<size_t> minHeap;
+	/**
+	 * The max heap.
+	 */
 	std::vector<size_t> maxHeap;	
 	/**
-	 * Number of nodes in the heap.
+	 * Number of keys in the heap.
 	 */
 	size_t s;
 	/**
@@ -60,7 +81,8 @@ protected:
 	 */
 	unsigned int d;
 	/*
-	 *  Assume that every node, except that the key in the node at index {@var index} may be smaller than
+	 *  Assume that every node, except that the key in the node at index {@var index} may be smaller
+	 *  	(for {@code promoteMin}) or greater (for {@code promoteMax}) than
 	 *  	that the key in its parent, statisfies the 2nd property mentioned above.
 	 *  Starting from the node at index {@var index}, this function iteratively promoting the key by 
 	 *  	swapping it with the key in the parent node and stops when it's not smaller than the key 
@@ -104,7 +126,8 @@ protected:
 	}
 	/*
 	 *  Assume that every node, except that the key in the node at index {@var index} may be greater than
-	 *  	that the keys in its children, statisfies the 2nd property mentioned above.
+	 *  	(for {@code heapifyMin)} or smaller than (for {@code heapifyMax}) that the keys in its children, 
+	 *  	statisfies the 2nd property mentioned above.
 	 *  Starting from the node at index {@var index}, this function iteratively sinking a key by 
 	 *  	swapping it with the smallest key in its children and stops when it's not greater than
 	 *  	any key in its children or when a leaf is reached.
@@ -146,6 +169,9 @@ protected:
 		return index;
 	}
 public:
+	/**
+	 * For test purpose, whether the data stores in each member of this class is consistent.
+	 */
 	bool isValid(){
 		for(size_t i = 0;i < s;++ i){
 			if(indexToMinHeap[minHeap[i]] != i || minHeap[indexToMinHeap[i]] != i ||
@@ -159,7 +185,7 @@ public:
 	 */
 	typedef T KeyType;
 	/**
-	 * Consturct a d-ary heap.
+	 * Consturct a d-ary min-max-heap.
 	 * @param d Dimension of the heap, must be greater than 2.
 	 * 	If {@var d} is less than 2, 2 will be used.
 	 */
@@ -168,7 +194,7 @@ public:
 		s = 0;
 	}
 	/**
-	 * Construct a d-ary heap with keys from the range {@code [begin, end)}.
+	 * Construct a d-ary min-max-heap with keys from the range {@code [begin, end)}.
 	 * @param d Dimension of the heap, must be greater than 2.
 	 * 	If {@var d} is less than 2, 2 will be used.
 	 * @param begin A forward iterator that represents the beginning of the range, inclusive.
@@ -260,6 +286,9 @@ public:
 		maxHeap.pop_back();
 	}
 
+	 /**
+	  * Remove the greatest key from the heap
+	  */
 	 void popMax() {
 		if (empty())
 			return;
@@ -301,6 +330,10 @@ public:
 	const T& min() const {
 		return data[minHeap[0]];
 	}
+	/**
+	 * @return The greatest key in the heap.
+	 * @note If the heap is empty, the behaviour is undefined.
+	 */
 	const T& max() const{
 		return data[maxHeap[0]];
 	}
@@ -313,7 +346,6 @@ public:
 	/*
 	 * Insert the key {@var item} into the heap.
 	 * @param item The key.
-	 * @return Index of the key inserted.
 	 */
 	void add(const T& item) {
 		data.push_back(item);
@@ -323,43 +355,11 @@ public:
 	}
 
 	/**
-	 * @return The number of nodes in the heap.
+	 * @return The number of keys in the heap.
 	 */
 	size_t size() const {
 		return s;
 	}
 };
-/*template<class T, class Seq = std::vector<T>, class Less = std::less<T> >
-class BinaryHeap: public NaryMinMaxHeap<T, Seq, Less> {
-protected:
-	virtual size_t heapify(size_t index) {
-		size_t s = SuperClass::size();
-		Seq& data = SuperClass::data;
-		while (index < s) {
-			size_t smallest = index;
-			size_t l = 2 * index + 1;
-			size_t r = 2 * index + 2;
-			if (l < s && SuperClass::comparator(data[l], data[smallest]))
-				smallest = l;
-			if (r < s && SuperClass::comparator(data[r], data[smallest]))
-				smallest = r;
-			if (smallest == index)
-				break;
-			swap(data[index], data[smallest]);
-			index = smallest;
-		}
-		return index;
-	}
-	typedef NaryMinMaxHeap<T, Seq, Less> SuperClass;
-public:
-	BinaryHeap() :
-			SuperClass(2) {
-	}
-	template<class ForwardIterator>
-	BinaryHeap(ForwardIterator begin, ForwardIterator end) :
-			SuperClass(2, begin, end) {
-	}
-};
-*/
 }
 #endif //MY_LIB_NARY_MIN_MAX_HEAP_H

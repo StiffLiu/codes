@@ -8,6 +8,8 @@
 #include <iostream>
 #include <condition_variable>
 #include <chrono>
+#include <sstream>
+#include <string>
 
 namespace{
 using namespace my_lib;
@@ -36,6 +38,26 @@ void drawArrays(double *points,
 	glDrawArrays(mode, 0, n);
 	//glBindBuffer(GL_ARRAY_BUFFER, savedBinding);	
 
+}
+void drawStringImpl(double x, double y, double scaleX, double scaleY, const char *s) {
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glTranslatef(x, y, 0.0);
+	glScaled(scaleX, scaleY, 1.0);
+	while(*s){	
+		glutStrokeCharacter(GLUT_STROKE_ROMAN, *s); 
+		++ s;
+	}
+	glPopMatrix();
+}
+void drawStringImpl(double x, double y, const std::string& s) {
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glTranslatef(x, y, 0.0);
+	//glScaled(0.0003, 0.0003, 0.0003);
+	for (size_t i = 0; i < s.size(); ++i)
+		glutStrokeCharacter(GLUT_STROKE_ROMAN, s[i]);
+	glPopMatrix();
 }
 void display(){
 	if(instance != nullptr)
@@ -94,6 +116,9 @@ void TwoDPlot::drawAxis(double minX, double maxX,
 	glVertex2f(minX, minY);	
 	glVertex2f(maxX, minY);
 	glEnd();
+}
+void TwoDPlot::drawString(double x, double y, const char *str){
+	drawStringImpl(x, y, 1.0, 1.0, str);
 }
 /*****************************************************/
 void StatPlotBase::collecting(StatPlotBase *plot){
@@ -158,6 +183,10 @@ void StatPlotBase::show(){
 		}
 	}
 	drawAxis(xMin, xMax, yMin, yMax);
+	std::ostringstream os;
+	os << "min : " << yMin << ", max : " << yMax;
+	drawStringImpl(xMin + 0.05 * deltaX, yMin + 0.05 * deltaY, 
+		1 / deltaX, 1 / deltaY, os.str().c_str());
 	glFlush();
 }
 StatPlotBase::~StatPlotBase(){

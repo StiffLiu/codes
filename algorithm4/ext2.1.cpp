@@ -556,7 +556,7 @@ void nonRecursiveQuickSort(T a, unsigned int n, Comparator comparator) {
 		if (j + 2 < n)
 			n2 = n - j - 1;
 
-		// This is import to make the stack size less than 2* log(n)
+		// This is important to make the stack size less than 2* log(n)
 		if (n1 >= n2) {
 			if (n1 > 0) {
 				current += 2;
@@ -589,8 +589,8 @@ void specialQuickSort(T a, unsigned int n, Comparator comparator) {
 	insertionSort(a, n, comparator);
 }
 /**
- * the difference between this partition method and {@see partition} is that
- * this partition assumes a sentinel element at the end of the input array, that is
+ * the difference between this partition method and {@see partition} is 
+ * this partition method assumes a sentinel element at the end of the input array, that is
  * there is an element at position {@code a[n]} or  {@code a[n - 1]} that is greater than {@code a[0]}.
  * With a sentinel, bounds checking could be eliminated,
  */

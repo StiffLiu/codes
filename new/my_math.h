@@ -1,5 +1,11 @@
 #ifndef MY_LIB_MY_MATH_H
 #define MY_LIB_MY_MATH_H
+#include <vector>
+#include <cassert>
+#include <random>
+#include <algorithm>
+#include <iostream>
+
 namespace my_lib{
 	/**
 	 * This function returns the smallest integer {@var n}, such that the {@var n}th
@@ -47,5 +53,46 @@ namespace my_lib{
 		}
 		return n - 1;
 	}
+	class DiscreteDistribution{
+		typedef double Real;
+		typedef std::vector<Real> DoubleVector;
+		typedef std::random_device RandomDevice;
+		typedef std::default_random_engine DefaultRandomEngine;
+		typedef std::uniform_real_distribution<Real> UniformRealDistribution;
+		DoubleVector accumulated;	
+		RandomDevice rd;
+		DefaultRandomEngine dre; 	
+		UniformRealDistribution urd;	
+	public:
+		template<class ForwardIterator>
+		DiscreteDistribution(ForwardIterator begin, ForwardIterator end){
+			Real start = 0.0;
+			while(begin != end){
+			       start += *begin;
+			       accumulated.push_back(start);
+			       ++begin;
+			}
+
+			dre = DefaultRandomEngine(rd());
+			if(!accumulated.empty())
+				urd = UniformRealDistribution(0.0, accumulated.back());
+			for(auto i = 0;i < accumulated.size();++ i)
+				std::cout << accumulated[i] << std::endl;
+		}
+		int next(){
+			if(accumulated.empty())
+				return -1;
+			Real tmp = urd(dre);
+			int count = accumulated.size();
+			int distance = std::upper_bound(accumulated.begin(), accumulated.end(), tmp) -
+				accumulated.begin();
+			if(distance >= count)
+				return count - 1;
+			return distance;
+				
+
+		}
+				
+	};
 }
 #endif //MY_LIB_MY_MATH_H

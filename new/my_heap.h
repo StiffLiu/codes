@@ -368,7 +368,7 @@ public:
 		data.pop_back();
 	}
 	/**
-	 * @return The number of nodes in the heap.
+	 * @return The number of keys in the heap.
 	 */
 	size_t size() const {
 		return s;

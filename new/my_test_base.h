@@ -16,6 +16,7 @@ public:
 	static void drawPath(double *vertices, double *colors, unsigned int n);
 	static void drawPath(double *vertices, unsigned int n, double *color);
 	static void drawAxis(double minX, double maxX, double minY, double maxY);
+	static void drawString(double x, double y, const char *str);
 protected:
 	virtual void init(){
 	}

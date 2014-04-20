@@ -1,11 +1,14 @@
 #include "my_heap.h"
 #include "my_min_max_heap.h"
 #include "my_median_heap.h"
+#include "my_math.h"
 #include <cassert>
 #include <iterator>
 #include <iostream>
 #include <algorithm>
 #include <random>
+
+#define ARSIZE(ar) (sizeof(ar) / sizeof (*(ar)))
 
 static int validateHeap(int argc, char *argv[]){
 	using namespace my_lib;
@@ -71,7 +74,26 @@ static int validateHeap(int argc, char *argv[]){
 	assert(medianHeap.empty());
 	return 0;
 }
-int outputHeap(int argc, char *argv[]){
+static int testDiscreteDist(int argc, char *argv[]){
+	double probabilities[] = {0.1, 0.2, 0.3, 0.4, 0.5};
+	auto count = ARSIZE(probabilities);
+	my_lib::DiscreteDistribution dd(probabilities, probabilities + count);
+	int counts[count];
+	auto iteration = 1000000;
+	double sum = std::accumulate(probabilities, probabilities + count, 0.0);
+	for(decltype(count) i = 0;i < count;++ i){
+		counts[i] = 0;
+	}
+	for(auto i = 0;i < iteration;++ i){
+		++ counts[dd.next()];
+	}
+	for(decltype(count) i = 0;i < count;++ i){
+		std::cout << counts[i] << "\texpected : " 
+			<< (int)(iteration * probabilities[i] / sum) << std::endl;
+	}
+	return 0;
+}
+static int outputHeap(int argc, char *argv[]){
 	using namespace my_lib;
 	using namespace std;
 	std::initializer_list<double> l = {10.0, 4.0, 5.0, 8.0, 3.0, 4.0};
@@ -101,5 +123,6 @@ int heapTest(int argc, char *argv[]){
 	for(auto i = 0;i < 100;++ i)
 	validateHeap(argc, argv);
 	outputHeap(argc, argv);
+	testDiscreteDist(argc, argv);
 	return 0;
 }
