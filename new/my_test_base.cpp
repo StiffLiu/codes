@@ -10,10 +10,13 @@
 #include <chrono>
 #include <sstream>
 #include <string>
+#include <iostream>
 
 namespace{
 using namespace my_lib;
 TwoDPlot *instance = nullptr;
+double pointSize = 4.0;
+double charSize = 0.0003;
 void openGLInit() {
 	glEnableClientState(GL_COLOR_ARRAY);
 	glEnableClientState(GL_VERTEX_ARRAY);
@@ -21,11 +24,11 @@ void openGLInit() {
 	glColor3f(0.314, 0.314, 0.000); 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glPointSize(4.0);
+	glPointSize(pointSize);
 	gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
 }
-void drawArrays(double *points, 
-	double *colors, unsigned int n, GLenum mode){
+void drawArrays(double *points, double *colors, 
+	unsigned int *indices, unsigned int n, GLenum mode){
 	if(points == nullptr || n <= 0)
 		return;
 
@@ -35,20 +38,30 @@ void drawArrays(double *points,
 	glVertexPointer(2, GL_DOUBLE, 0, points);
 	if(colors != nullptr)
 		glColorPointer(3, GL_DOUBLE, 0, colors);
-	glDrawArrays(mode, 0, n);
+	if(indices == nullptr)
+		glDrawArrays(mode, 0, n);
+	else
+		glDrawElements(mode, n, GL_UNSIGNED_INT, indices); 
 	//glBindBuffer(GL_ARRAY_BUFFER, savedBinding);	
 
 }
-void drawStringImpl(double x, double y, double scaleX, double scaleY, const char *s) {
+void drawStringImpl(double x, double y, const char *s) {
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluOrtho2D(0.0, 1.0, 0.0, 1.0);
 	glMatrixMode(GL_MODELVIEW);
 	glPushMatrix();
+	
+	glPointSize(1.0);
+	glLoadIdentity();
 	glTranslatef(x, y, 0.0);
-	glScaled(scaleX, scaleY, 1.0);
+	glScaled(charSize, charSize, 1.0);
 	while(*s){	
 		glutStrokeCharacter(GLUT_STROKE_ROMAN, *s); 
 		++ s;
 	}
 	glPopMatrix();
+	glPointSize(pointSize);
 }
 void drawStringImpl(double x, double y, const std::string& s) {
 	glMatrixMode(GL_MODELVIEW);
@@ -91,7 +104,7 @@ int TwoDPlot::run(int argc, char *argv[]){
 }
 void TwoDPlot::drawPoints(double *points, 
 	double *colors, unsigned int n){
-	drawArrays(points, colors, n, GL_POINTS);
+	drawArrays(points, colors, nullptr, n, GL_POINTS);
 }
 void TwoDPlot::drawPoints(double *points,
 	unsigned int n, double *color){
@@ -101,13 +114,23 @@ void TwoDPlot::drawPoints(double *points,
 }
 void TwoDPlot::drawPath(double *vertices,
 	double *colors, unsigned int n){
-	drawArrays(vertices, colors, n, GL_LINE_STRIP);
+	drawArrays(vertices, colors, nullptr, n, GL_LINE_STRIP);
 }
 void TwoDPlot::drawPath(double *vertices,
 	unsigned int n, double *color){
 	if(color != nullptr)
 		glColor3d(color[0], color[1], color[2]);
-	drawArrays(vertices, nullptr, n, GL_LINE_STRIP);
+	drawArrays(vertices, nullptr, nullptr, n, GL_LINE_STRIP);
+}
+void TwoDPlot::drawEdges(double *vertices, unsigned int* edges, 
+	double *colors, unsigned int n){
+	drawArrays(vertices, colors, edges, n, GL_LINES);
+}
+void TwoDPlot::drawEdges(double *vertices, unsigned int* edges,
+	unsigned int n, double *color){
+	if(color != nullptr)
+		glColor3d(color[0], color[1], color[2]);
+	drawArrays(vertices, nullptr, edges, n, GL_LINES);
 }
 void TwoDPlot::drawAxis(double minX, double maxX,
 	double minY, double maxY){
@@ -118,7 +141,7 @@ void TwoDPlot::drawAxis(double minX, double maxX,
 	glEnd();
 }
 void TwoDPlot::drawString(double x, double y, const char *str){
-	drawStringImpl(x, y, 1.0, 1.0, str);
+	drawStringImpl(x, y, str);
 }
 /*****************************************************/
 void StatPlotBase::collecting(StatPlotBase *plot){
@@ -130,7 +153,7 @@ void StatPlotBase::collecting(StatPlotBase *plot){
 			for(size_t i = 0;i < graphs.size();++ i){
 				std::vector<double>& points = graphs[i];
 				size_t index = 2 * i;
-				if(points.size() > plot->maxNumPoints){
+				if(plot->maxNumPoints > 0 && points.size() / 2 > plot->maxNumPoints){
 					auto pos = points.begin();
 					auto end = pos + 2;
 					points.erase(pos, end);
@@ -162,10 +185,14 @@ void StatPlotBase::show(){
 		xMin = 0.0;
 	if(yMin == DBL_MAX)
 		yMin = 0.0;
-	if(xMin + eps > xMax)
-		xMax = xMin + eps;
-	if(yMin + eps > yMax)
-		yMax = yMin + eps;
+	if(xMin + eps > xMax){
+		xMax += eps;
+		xMin -= eps;
+	}
+	if(yMin + eps > yMax){
+		yMax += eps;
+		yMin -= eps;
+	}
 	
 	double deltaX = xMax - xMin;
 	double deltaY = yMax - yMin;
@@ -185,13 +212,52 @@ void StatPlotBase::show(){
 	drawAxis(xMin, xMax, yMin, yMax);
 	std::ostringstream os;
 	os << "min : " << yMin << ", max : " << yMax;
-	drawStringImpl(xMin + 0.05 * deltaX, yMin + 0.05 * deltaY, 
-		1 / deltaX, 1 / deltaY, os.str().c_str());
+	drawStringImpl(0.02, 0.02, os.str().c_str());
 	glFlush();
 }
 StatPlotBase::~StatPlotBase(){
 	instance = nullptr;
 	collectingThread.join();
 	std::cout << "exited" << std::endl;	
+}
+void TreePlotBase::show(){
+	double xMin = DBL_MAX, xMax = -DBL_MAX, yMin = DBL_MAX, yMax = -DBL_MAX;
+	glClear(GL_COLOR_BUFFER_BIT);
+	for(size_t j = 0;j < points.size();j += 2){
+		xMin = std::min(xMin, points[j]);
+		xMax = std::max(xMax, points[j]);
+		yMin = std::min(yMin, points[j + 1]);
+		yMax = std::max(yMax, points[j + 1]);
+
+	}
+
+	const double eps = 1e-3;
+	if(xMin == DBL_MAX)
+		xMin = 0.0;
+	if(yMin == DBL_MAX)
+		yMin = 0.0;
+	if(xMin + eps > xMax){
+		xMax += eps;
+		xMin -= eps;
+	}
+	if(yMin + eps > yMax){
+		yMax += eps;
+		yMin -= eps;
+	}
+
+	double deltaX = xMax - xMin;
+	double deltaY = yMax - yMin;
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluOrtho2D(xMin - 0.01 * deltaX, xMax + 0.01 * deltaX, 
+			yMin - 0.01 * deltaY, yMax + 0.01 * deltaY);
+	double color[3] = {1.0, 0.0, 0.0};
+	if(!points.empty()){
+		glPointSize(3.0);
+		drawPoints(&points[0], points.size() / 2, color); 
+		if(!edges.empty())
+			drawEdges(&points[0], &edges[0], edges.size(), color);
+	}
+	glFlush();
 }
 }

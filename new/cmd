@@ -1,1 +1,2 @@
-g++ -std=c++11 -O0 -g3 -Wall -pthread -fmessage-length=0 my_symbol_table_test.cpp main.cpp -o main
+g++ -std=c++11 -O0 -g3 -Wall -pthread -fmessage-length=0 -Wl,--no-as-needed -lglut -lGLU -lGL -lGLEW my_rand_string_generator.cpp my_symbol_table_performance_test.cpp my_test_base.cpp -o main
+#g++ -std=c++11 -O0 -g3 -Wall -pthread -fmessage-length=0 my_rand_string_generator.cpp my_symbol_table_test.cpp main.cpp -o main

@@ -14,7 +14,7 @@ struct CharacterClasses{
 		digits = "0123456789";
 		hexDigits = "0123456789ABCDEF";
 		for(int i = 0;i < 128;++ i){
-			if(std::isprintable(char(i))){
+			if(std::isprint(char(i))){
 				printables.push_back(char(i));
 				if(!std::isspace(char(i))){
 					printableNoWhiteSpaces.push_back(char(i));
@@ -33,8 +33,11 @@ struct CharacterClasses{
 		std::uniform_int_distribution<unsigned int> indexGenerator(0, count); 
 		std::uniform_int_distribution<unsigned int> lengthGenerator(minLen, maxLen);
 		auto len = lengthGenerator(rd);
-		for(decltype(len) i = 0;i < len;++ i)
-			str.push_back(chars[indexGenerator(rd)]);
+		decltype(len) i = str.size();
+		str.resize(str.size() + len);
+		len = str.size();
+		for(;i < len;++ i)
+			str[i] = chars[indexGenerator(rd)];
 	}
 }instance;
 }
@@ -44,7 +47,7 @@ void RandStringGenerator::randStringAlpha(std::string& str){
 		instance.alphas.size(), str);
 }
 void RandStringGenerator::randStringInt(std::string& str){
-	CharacterClasses::generate(minLen, maxLen, hexDigits.c_str(),
+	CharacterClasses::generate(minLen, maxLen, instance.hexDigits.c_str(),
 		instance.hexDigits.size(), str);
 }
 
@@ -63,8 +66,8 @@ void RandStringGenerator::randStringAlphaNum(std::string& str){
 }
 
 void RandStringGenerator::randStringPrintable(std::string& str){
-	CharacterClasses::generate(minLen, maxLen, instance.printable.c_str(),
-		instance.printable.size(), str);
+	CharacterClasses::generate(minLen, maxLen, instance.printables.c_str(),
+		instance.printables.size(), str);
 }
 
 void RandStringGenerator::randStringNoWhiteSpaces(std::string& str){

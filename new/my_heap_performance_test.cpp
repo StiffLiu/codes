@@ -9,7 +9,7 @@
 #include <cstdlib>
 
 #define ARSIZE(a) (sizeof(a) / (sizeof *(a)))
-
+namespace{
 class TestPlot : public my_lib::StatPlot<TestPlot&>{
 	typedef my_lib::StatPlot<TestPlot&> Super;
 	unsigned int start = 100;
@@ -184,6 +184,7 @@ public:
 	}
 
 };
+}
 int main(int argc, char *argv[]){
 	PathologicalCases test;
 	test.run(argc, argv);

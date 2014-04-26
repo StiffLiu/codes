@@ -3,6 +3,13 @@
 #include <iostream>
 #include <cassert>
 #include <cstdio>
+#include <ctime>
+#include <vector>
+#include <string>
+#include <fstream>
+#include <iterator>
+
+#ifdef MY_MEM_TEST
 namespace{
 template<class T>
 struct MyAllocator : public std::allocator<T>{
@@ -39,9 +46,10 @@ void operator delete(void *p){
 	std::cout << "deallocate memory : " << p << std::endl;
 	free(p);
 }
-
+#endif
 #include "my_list_symbol_table.h"
 #include "my_bin_search_symbol_table.h"
+#include "my_rand_string_generator.h"
 
 using namespace std;
 using namespace my_lib;
@@ -115,11 +123,55 @@ int validateIterator(const SymbolTable<unsigned int, unsigned int>& st){
 	return 0;
 }
 
-void doublingTestOfSymbolTable(){
-	
+clock_t testOne(SymbolTable<std::string, bool>& st, const std::vector<string>& strs, unsigned int n){
+	clock_t start = clock();
+	for(unsigned int i = 0;i < n;++ i)
+		st.put(strs[i], true);
+	return clock() - start;
 }
 
-int testListSymbolTable(int argc, char *argv[]){
+template<class T>
+void doublingTestOfSymbolTable(const std::vector<std::string>& vec){
+	clock_t last = 0;
+	for(unsigned int i = 1;i < vec.size(); i *= 2){
+		T st;
+		clock_t current = testOne(st, vec, i);
+		std::cout << "count = " << i << ", ticks = " << current;
+		if(i != 1){
+			if(last == 0){
+				cout << ", ratio = -";
+			}else{
+				cout << ", ratio = " << current / (double)last;
+			}
+		}
+		cout << endl;
+		last = current;
+	}
+}
+void doublingTestOfSymbolTable(){
+	std::vector<std::string> vec;
+	if(false){
+		std::ifstream in("/development/documents/books/algos4/algs4.cs.princeton.edu/31elementary/tale.txt");
+		std::copy(std::istream_iterator<std::string>(in), 
+			std::istream_iterator<std::string>(),
+			std::back_inserter(vec));
+	}else{
+		auto count = (1 << 17);
+		RandStringGenerator gen(5, 10);
+		cout << "generating " << count << " strings with length between 5 and 10 " << endl;
+		for(auto i = 0;i < count;++ i){
+			vec.push_back(string());
+			gen.randStringPrintable(vec.back());
+			//cout << vec.back() << endl;
+		}
+	}
+	cout << "-------------doubling test for binary search symbol table-------------" << endl;
+	doublingTestOfSymbolTable<BinSearchSymbolTable<std::string, bool> >(vec);
+	cout << "-------------doubling test for list symbol table-------------" << endl;
+	doublingTestOfSymbolTable<ListSymbolTable<std::string, bool> >(vec);
+
+}
+int testSymbolTables(int argc, char *argv[]){
 	ListSymbolTable<unsigned int, unsigned int> listST;
 	fillSymbolTable(listST);
 	validateIterator(listST);
@@ -136,6 +188,6 @@ int testListSymbolTable(int argc, char *argv[]){
 
 }
 int testSymbolTable(int argc, char *argv[]){
-	return testListSymbolTable(argc, argv);
+	return testSymbolTables(argc, argv);
 }
 
