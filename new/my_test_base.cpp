@@ -45,7 +45,7 @@ void drawArrays(double *points, double *colors,
 	//glBindBuffer(GL_ARRAY_BUFFER, savedBinding);	
 
 }
-void drawStringImpl(double x, double y, const char *s) {
+void drawStringImpl(double x, double y, double charSize, const char *s) {
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	gluOrtho2D(0.0, 1.0, 0.0, 1.0);
@@ -62,6 +62,9 @@ void drawStringImpl(double x, double y, const char *s) {
 	}
 	glPopMatrix();
 	glPointSize(pointSize);
+}
+void drawStringImpl(double x, double y, const char *s){
+	drawStringImpl(x, y, charSize, s);
 }
 void drawStringImpl(double x, double y, const std::string& s) {
 	glMatrixMode(GL_MODELVIEW);
@@ -220,7 +223,7 @@ StatPlotBase::~StatPlotBase(){
 	collectingThread.join();
 	std::cout << "exited" << std::endl;	
 }
-void TreePlotBase::show(){
+void TreePlot::show(){
 	double xMin = DBL_MAX, xMax = -DBL_MAX, yMin = DBL_MAX, yMax = -DBL_MAX;
 	glClear(GL_COLOR_BUFFER_BIT);
 	for(size_t j = 0;j < points.size();j += 2){
@@ -255,8 +258,17 @@ void TreePlotBase::show(){
 	if(!points.empty()){
 		glPointSize(3.0);
 		drawPoints(&points[0], points.size() / 2, color); 
+
 		if(!edges.empty())
 			drawEdges(&points[0], &edges[0], edges.size(), color);
+		unsigned int numString = points.size() / 2;
+		for(unsigned int i = 0;i < numString;++ i){
+			unsigned int index = 2 * i;
+			const char *str = getString(i);
+			if(str != nullptr)
+				drawStringImpl((points[index] - xMin) / deltaX, 
+					(points[index + 1] - yMin) / deltaY, 0.0001, str);
+		}
 	}
 	glFlush();
 }

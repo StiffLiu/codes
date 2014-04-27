@@ -375,6 +375,8 @@ public:
 			}
 		}
 
+	}
+		}
 		calculate(bst.getRoot(),
 			GetNodeChildren<BST::NodeRef>());
 	}

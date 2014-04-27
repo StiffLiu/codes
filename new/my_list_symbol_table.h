@@ -111,6 +111,9 @@ public:
 		return table.size();
 	}
 	
+	void clear() override {
+		table.clear();
+	}
 	const Comparator& getComparator() const {
 		return comparator;
 	}

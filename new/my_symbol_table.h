@@ -148,6 +148,11 @@ public:
 	 */
 	virtual unsigned int size() const  = 0;
 
+	/**
+	 * remove all the elements in the symbol table.
+	 */
+	virtual void clear() = 0;
+
 	Iterator begin() const {
 		return Iterator(implBegin());
 	}

@@ -169,7 +169,11 @@ public:
 		auto p2 = std::upper_bound(table.begin(), table.end(), h, compareKey);
 		if(p1 < p2)
 			return p2 - p1;
-		return p1 - p2;
+		return 0;
+	}
+
+	void clear() override {
+		table.clear();
 	}
 };
 }
