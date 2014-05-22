@@ -2,8 +2,9 @@
 
 import os
 import sys
+import copy
 from pyparsing import Regex, Word, Group, operatorPrecedence
-from pyparsing import alphas, alphanums, opAssoc
+from pyparsing import alphas, alphanums, opAssoc, dblQuotedString
 
 class ExpressionParser:
   def __init__(self):
@@ -13,7 +14,6 @@ class ExpressionParser:
     self.not_like_op="nl"
     self.and_op = "a"
     self.or_op = "o"
-    self.in_op = "i"
     self.tags = set()
     self.operators = list()
     self.relational_exps = list()
@@ -34,26 +34,47 @@ class ExpressionParser:
     logical_ops = and_ops | or_ops
 
     tag = Word(alphas, alphanums + '_').setParseAction(validate_tag)
-    number = Regex('-?[0-9]+(.[0-9]+)?').setParseAction(lambda t:'"' + t[0] + '"')
-    literal = Regex('".*"').setParseAction(lambda t:t[0][1:-1])
+    number = Regex('-?[0-9]+(.[0-9]+)?').setParseAction(lambda t:[['"' + x + '"' for x in t]])
+    literal = copy.copy(dblQuotedString).setParseAction(lambda t:[[ '"' + x[1:-1] + '"' for x in t]])
     null_value = Regex('null(?i)').setParseAction(lambda v:"NULL")
     term = null_value | tag | number | literal
 
     relational_exp = Group(term + relational_ops + term)
-    self.logical_exp = operatorPrecedence(relational_exp, [(logical_ops, 2, opAssoc.LEFT, collect_data)], lpar=("\0"), rpar="\0")
+    self.logical_exp = operatorPrecedence(relational_exp, [(logical_ops, 2, opAssoc.LEFT)], lpar=("\0"), rpar="\0")
 
   
 
-    self.logical_exp.parseString('ABC=def || DGc==324.3 AND bcd != -34 OR "sdfdf" is te && FDF is   not null', parseAll=True)
-    print result
+    result = self.logical_exp.parseString('ABC=def || DGc==324.3 AND bcd != -34 OR "sdfdf" is te && FDF is   not null', parseAll=True)
     
-    print self.logical_exp.parseString('ABC=def', parseAll=True)
-    print self.logical_exp.parseString('ADB=def is null', parseAll=True)
-  
-  def collect_data
-  def simple_optimize(exp):
-    return 1
+    def simple_optimize(exp):
+      for i in range(len(exp)):
+	  if isinstance(exp[i], list):
+	    exp[i] = simple_optimize(exp[i])
+      optimized_exp = []
+      optimized_exp.append(exp[0])
+      
+      for i in range(1, len(exp), 2):
+	if ((exp[i] == self.or_op and optimized_exp[-1][0] == exp[i + 1][0] and optimized_exp[-1][1] == self.eq_op and exp[i + 1][1] == self.eq_op) 
+          or (exp[i] == self.and_op and optimized_exp[-1][0] == exp[i + 1][0] and optimized_exp[-1][1] == self.ne_op and exp[i + 1][1] == self.ne_op)):
+	  optimized_exp[-1][2].extend(exp[i + 1][2])
+	elif (exp[i] in [self.eq_op, self.ne_op] and not isinstance(exp[i + 1], list) 
+	  and (isinstance(optimized_exp[-1], list) or optimized_exp[-1] < exp[i + 1])):
+	  last_operand = optimized_exp[-1]
+	  optimized_exp[-1] = exp[i + 1]
+	  optimized_exp.append(exp[i])
+	  optimized_exp.append(last_operand)
+	else:	  
+	  optimized_exp.append(exp[i])
+	  optimized_exp.append(exp[i + 1])
+      return optimized_exp
 
+    print simple_optimize(result)
+
+    print simple_optimize(self.logical_exp.parseString('TimeInForce == 6 || 1 == TimeInForce And Test != "abc" And "ghf" is   not Test', parseAll=True).asList())
+
+    print self.logical_exp.parseString('ABC=def', parseAll=True)
+    #print self.logical_exp.parseString('ADB=def is null', parseAll=True)
+   
 def main():
   ep = ExpressionParser()
 
