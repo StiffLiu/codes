@@ -10,7 +10,10 @@ namespace my_lib{
 	class TwoDPlot{
 		public:
 			virtual void show() = 0;
+			virtual void redisplay();
 			virtual int run(int argc, char *argv[]);
+			virtual void keyboard(unsigned char key, int x, int y){
+			}
 			virtual ~TwoDPlot(){
 			}
 			static void drawPoints(double *points, double *colors, unsigned int n);
@@ -67,6 +70,8 @@ namespace my_lib{
 		public:
 			template<class T, class F>
 				void calculate(T t, F f){
+					edges.clear();
+					points.clear();
 					calculate(t, f, 0.0, 0.2, -0.1);
 				}
 			void show() override;

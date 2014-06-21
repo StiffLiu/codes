@@ -2,6 +2,10 @@
 #define MY_ORDERED_SYMBOL_TABLE_H
 #include "my_symbol_table.h"
 namespace my_lib{
+/**
+ * An ordered symbol table is a symbol table 
+ * where there is a total order relation between any two keys.
+ */
 template<class K, class V>
 class OrderedSymbolTable : public SymbolTable<K, V>{
 	typedef SymbolTable<K, V> Super;
@@ -18,7 +22,7 @@ public:
 	 * @return Pointer to the maximum key, {@code nullptr) doesn't exist.
 	 */
 	virtual const K* max() const = 0;
-	
+
 	/**
 	 * @return Largest key less than or equal to {@var k}.
 	 */

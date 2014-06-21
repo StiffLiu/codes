@@ -88,9 +88,16 @@ void idleFunc(){
 	lk.unlock();
 	glutPostRedisplay();
 }
+void kbd(unsigned char key, int x, int y){
+	if(instance != nullptr)
+		instance->keyboard(key, x, y);
+}
 }
 namespace my_lib{
 /*****************************************************/
+void TwoDPlot::redisplay(){
+	cv.notify_one();
+}
 int TwoDPlot::run(int argc, char *argv[]){
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
@@ -101,6 +108,7 @@ int TwoDPlot::run(int argc, char *argv[]){
 	glutIdleFunc(idleFunc);
 	openGLInit();
 	instance = this;	
+	glutKeyboardFunc(kbd);
 	init();
 	glutMainLoop();
 	return 0;
@@ -250,10 +258,13 @@ void TreePlot::show(){
 
 	double deltaX = xMax - xMin;
 	double deltaY = yMax - yMin;
+	double margin = 0.02;
+	double marginX = margin * deltaX;
+	double marginY = margin * deltaY;
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluOrtho2D(xMin - 0.01 * deltaX, xMax + 0.01 * deltaX, 
-			yMin - 0.01 * deltaY, yMax + 0.01 * deltaY);
+	gluOrtho2D(xMin - marginX, xMax + marginX, 
+			yMin - marginY, yMax + marginY);
 	double color[3] = {1.0, 0.0, 0.0};
 	if(!points.empty()){
 		glPointSize(3.0);
@@ -265,9 +276,10 @@ void TreePlot::show(){
 		for(unsigned int i = 0;i < numString;++ i){
 			unsigned int index = 2 * i;
 			const char *str = getString(i);
-			if(str != nullptr)
-				drawStringImpl((points[index] - xMin) / deltaX, 
-					(points[index + 1] - yMin) / deltaY, 0.0001, str);
+			if(str != nullptr){
+				drawStringImpl((points[index] - xMin + marginX) / (deltaX + 2 * marginX), 
+					(points[index + 1] - yMin + marginY) / (deltaY + 2 * marginY), 0.0001, str);
+			}
 		}
 	}
 	glFlush();

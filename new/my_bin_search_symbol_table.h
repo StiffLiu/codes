@@ -175,6 +175,11 @@ public:
 	void clear() override {
 		table.clear();
 	}
+	
+	const C& getComparator() const {
+		return compareKey.comparator;
+	}
+
 };
 }
 #endif //MY_BIN_SEARCH_SYMBOL_TABLE_H

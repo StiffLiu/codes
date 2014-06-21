@@ -121,10 +121,11 @@ void fillSymbolTable(SymbolTable<KeyType, ValueType>& st){
 }
 int validateSymbolTable(SymbolTable<KeyType, ValueType>& st){
 	std::cout << "test symbol table" << std::endl;
-	assert(*st.get(4) == 3);
-	assert(*st.get(3) == 6);
-	assert(*st.get(8) == 7);
-	assert(*st.get(9) == 10);
+	const ValueType *ret = nullptr;
+	assert((ret = st.get(4)) != nullptr && *ret == 3);
+	assert((ret = st.get(3)) != nullptr && *ret == 6);
+	assert((ret = st.get(8)) != nullptr && *ret == 7);
+	assert((ret = st.get(9)) != nullptr && *ret == 10);
 	assert(st.size() == 4);
 	assert(!st.isEmpty());
 	assert(st.contains(8));
@@ -173,7 +174,26 @@ int validateOrderedSymbolTable(OrderedSymbolTable<KeyType, ValueType>& st){
 	return 0;
 }
 
+template<class T>
+void testRotate(T& t){
+	if(t.isEmpty())
+		return;
+	unsigned int s = t.size();
+	cout << "test rotate" << endl;
+	for(unsigned int i = 0;i < 2 * s;++ i){
+		unsigned int r = rand() % s;
+		if(rand() % 2 == 0)
+			t.leftRotate(r);
+		else
+			t.rightRotate(r);
+		assert(t.isValid());
+	}
+}
 void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
+	BinarySearchTree<KeyType, ValueType>* bst = 
+		dynamic_cast<BinarySearchTree<KeyType, ValueType>*>(&ost);
+	RBTree<KeyType, ValueType> *rbBst = 
+		dynamic_cast<RBTree<KeyType, ValueType>*>(&ost);
 	const unsigned int count = 100;
 	double nums[count];
 	unsigned int indices[count];
@@ -186,8 +206,11 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 	ost.clear();
 	assert(ost.isEmpty());
 	assert(ost.size() == 0);
-	for(unsigned int i = 0;i < count;++ i)
+	for(unsigned int i = 0;i < count;++ i){
 		ost.put(nums[indices[i]], nums[indices[i]]);
+		assert(bst == nullptr || bst->isValid());
+		assert(rbBst == nullptr || rbBst->isValid());
+	}
 
 	for(unsigned int i = 0;i < count;++ i){
 		assert(ost.contains(nums[indices[i]]));
@@ -206,17 +229,19 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 	for(unsigned int i = 0;i < count;++ i){
 		assert(ost.rank(*ost.select(nums[i])) == i);
 		assert(*ost.select(i) == nums[i]);
-		assert(*ost.floor(nums[i]) == nums[i]);
-		assert(*ost.ceil(nums[i]) == nums[i]);
-		assert(*ost.floor(nums[i] + 0.5) == nums[i]);
-		assert(*ost.ceil(nums[i] - 0.5) == nums[i]);
+		
+		const KeyType* ret = nullptr;
+		assert((ret = ost.floor(nums[i])) != nullptr && *ret == nums[i]);
+		assert((ret = ost.ceil(nums[i])) != nullptr && *ret == nums[i]);
+		assert((ret = ost.floor(nums[i] + 0.5)) != nullptr && *ret == nums[i]);
+		assert((ret = ost.ceil(nums[i] - 0.5)) != nullptr && *ret == nums[i]);
 		if(i > 0)
-			assert(i > 0 && *ost.floor(nums[i] - 0.5) == nums[i - 1]);
+			assert(i > 0 && (ret = ost.floor(nums[i] - 0.5)) != nullptr && *ret == nums[i - 1]);
 		else{
 			assert(ost.floor(nums[i] - 0.5) == nullptr);
 		}
 		if(i < count - 1)
-			assert(i < count - 1 && *ost.ceil(nums[i] + 0.5) == nums[i + 1]);
+			assert(i < count - 1 && (ret = ost.ceil(nums[i] + 0.5)) != nullptr && *ret == nums[i + 1]);
 		else
 			assert(ost.ceil(nums[i] + 0.5) == nullptr);
 		assert(ost.size(nums[i], nums[i]) == 1);
@@ -235,6 +260,8 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 	for(unsigned int i = 0;i < toRemove;++ i){
 		assert(nums[i] == *ost.min());
 		ost.removeMin();
+		assert(bst == nullptr || bst->isValid());
+		assert(rbBst == nullptr || rbBst->isValid());
 	}
 	
 
@@ -246,6 +273,8 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 	for(unsigned int i = count - 1, j = 0;j < toRemove;--i, ++ j){
 		assert(nums[i] == *ost.max());
 		ost.removeMax();
+		assert(bst == nullptr || bst->isValid());
+		assert(rbBst == nullptr || rbBst->isValid());
 		assert(!ost.contains(nums[i]));
 	}
 
@@ -259,17 +288,13 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 		++ index;
 	}
 
-	BinarySearchTree<KeyType, ValueType>* bst = 
-		dynamic_cast<BinarySearchTree<KeyType, ValueType>*>(&ost);
-	if(bst != nullptr)
-		assert(bst->isValid());
 
 	cout << "test : remove" << endl;
 	index = ost.size();
 	for(unsigned int i = toRemove + 4;i < count - toRemove;i += 2){
 		ost.remove(nums[i]);
-		if(bst != nullptr)
-			assert(bst->isValid());
+		assert(bst == nullptr || bst->isValid());
+		assert(rbBst == nullptr || rbBst->isValid());
 		--index;
 	}
 	
@@ -338,6 +363,22 @@ void doublingTestOfSymbolTable(){
 	doublingTestOfSymbolTable<ListSymbolTable<std::string, bool> >(vec);
 
 }
+class TestBST : public BinarySearchTree<KeyType, ValueType>{
+	typedef BinarySearchTree<KeyType, ValueType> Super;
+public:
+	bool leftRotate(unsigned int r){
+		NodePtr n = selectInner(r);
+		if(n == NodePtr())
+			return false;
+		return Super::leftRotate(n);
+	}	
+	bool rightRotate(unsigned int r){
+		NodePtr n = selectInner(r);
+		if(n == NodePtr())
+			return false;
+		return Super::rightRotate(n);
+	}	
+};
 int testSymbolTables(int argc, char *argv[]){
 	ListSymbolTable<KeyType, ValueType> listST;
 	cout << "-----------symbol table with sequential search implementation---------------" << endl;
@@ -352,7 +393,7 @@ int testSymbolTables(int argc, char *argv[]){
 	validateSymbolTable(binST);
 	moreOrderedTest(binST);
 	cout << "------------binary search tree---------------" << endl;
-	BinarySearchTree<KeyType, ValueType> bst;
+	TestBST bst;
 	assert(bst.isValid());
 	fillSymbolTable(bst);
 	assert(bst.isValid());
@@ -363,9 +404,24 @@ int testSymbolTables(int argc, char *argv[]){
 	validateSymbolTable(bst);
 	assert(bst.isValid());
 	moreOrderedTest(bst);
+	testRotate(bst);
+	cout << "--------------red black tree----------------" << endl;
+	RBTree<KeyType, ValueType> rbTree;
+	assert(rbTree.isValid());
+	fillSymbolTable(rbTree);
+	assert(rbTree.isValid());
+	validateIterator(rbTree);
+	assert(rbTree.isValid());
+	validateOrderedSymbolTable(rbTree);
+	assert(rbTree.isValid());
+	validateSymbolTable(rbTree);
+	assert(rbTree.isValid());
+	moreOrderedTest(rbTree);
 	//doublingTestOfSymbolTable();
+	cout << "--------------end of all tests---------------" << endl;
 	return 0;
 }
+
 
 }
 int testSymbolTable(int argc, char *argv[]){

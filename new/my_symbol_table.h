@@ -9,13 +9,14 @@ namespace my_lib{
  * 3. test whether a key is contained in the symbol table.
  *
  * A key could only be associated with one value. If the symbol table already contains 
- * a key, and a new key-value pair in put in the symbol table with that key, the new 
- * value will replace the old value. 
+ * a key, and a new key-value pair in put in the symbol table with that key, the old 
+ * value will replace the new value. 
  * 
  *To make the symbol table more convinient to use, the following interfaces is  
  *also supported:
  * 1. get the number of key value pairs in the symbol table.
  * 2. test whether the symbol table is empty.
+ * 3. an iterator used to iterate through the symbol table.
  */
 template<class K, class V>
 class SymbolTable{

@@ -22,18 +22,18 @@ class ExpressionParser:
       self.tags.update(tokens)
       return tokens[0]
 
-    eq_ops = Regex('==?|is(?i)').setParseAction(lambda t:self.eq_op)
-    ne_ops = Regex('!=|is\s+not(?i)').setParseAction(lambda t:self.ne_op)
-    like_ops = Regex('like(?i)').setParseAction(lambda t:self.like_op)
-    not_like_ops = Regex('not\s+like(?i)').setParseAction(lambda t:self.not_like_op)
-    and_ops = Regex('&&|and(?i)').setParseAction(lambda t:self.and_op)
-    or_ops = Regex('\|\||or(?i)').setParseAction(lambda t:self.or_op)
+    eq_ops = Regex('==?|\sis\s(?i)').setParseAction(lambda t:self.eq_op)
+    ne_ops = Regex('!=|\sis\s+not\s(?i)').setParseAction(lambda t:self.ne_op)
+    like_ops = Regex('\slike\s(?i)').setParseAction(lambda t:self.like_op)
+    not_like_ops = Regex('\snot\s+like\s(?i)').setParseAction(lambda t:self.not_like_op)
+    and_ops = Regex('&&|\sand\s(?i)').setParseAction(lambda t:self.and_op)
+    or_ops = Regex('\|\||\sor\s(?i)').setParseAction(lambda t:self.or_op)
 
     #the order of "ne_ops" and "eq_ops" matters
     relational_ops = ne_ops | eq_ops | like_ops | not_like_ops
     logical_ops = and_ops | or_ops
 
-    tag = Word(alphas, alphanums + '_').setParseAction(validate_tag)
+    tag = Regex('[a-zA-Z][a-zA-Z0-9_]*').setParseAction(validate_tag)
     number = Regex('-?[0-9]+(.[0-9]+)?').setParseAction(lambda t:[['"' + x + '"' for x in t]])
     literal = copy.copy(dblQuotedString).setParseAction(lambda t:[[ '"' + x[1:-1] + '"' for x in t]])
     null_value = Regex('null(?i)').setParseAction(lambda v:"NULL")
@@ -43,6 +43,8 @@ class ExpressionParser:
     self.logical_exp = operatorPrecedence(relational_exp, [(logical_ops, 2, opAssoc.LEFT)], lpar=("\0"), rpar="\0")
 
   
+    result = self.logical_exp.parseString('ghi  is  tmp')
+    print result
 
     result = self.logical_exp.parseString('ABC=def || DGc==324.3 AND bcd != -34 OR "sdfdf" is te && FDF is   not null', parseAll=True)
     
@@ -70,7 +72,7 @@ class ExpressionParser:
 
     print simple_optimize(result)
 
-    print simple_optimize(self.logical_exp.parseString('TimeInForce == 6 || 1 == TimeInForce And Test != "abc" And "ghf" is   not Test', parseAll=True).asList())
+    print simple_optimize(self.logical_exp.parseString('TimeInForce == 6 || 1 == TimeInForce and AndTest != "abc" And "ghf" is   not Test', parseAll=True).asList())
 
     print self.logical_exp.parseString('ABC=def', parseAll=True)
     #print self.logical_exp.parseString('ADB=def is null', parseAll=True)
