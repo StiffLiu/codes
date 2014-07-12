@@ -965,8 +965,74 @@ struct UIntValues{
 	}
 
 };
+
+void optimalBST(double *p, double *q, unsigned int n, unsigned int *r){
+	double *e = new double [n * n];
+	double *w = new double [n * n];
+	for(unsigned int i = 0;i < n;++ i){
+		unsigned int index = i * n + i;
+		double cost = q[i] + p[i] + q[i + 1];
+		e[index] = cost;
+		w[index] = cost;
+		r[index] = i;
+	}
+
+	for(unsigned int l = 1;l < n;++ l){
+		unsigned int i = 0;
+		unsigned int j = l;
+		while(j < n){
+			double weight = q[i] + p[i] + w[(i + 1) * n + j];
+			double cost = q[i] + e[(i + 1) * n + j] + weight; 
+			double minCost = cost;
+			unsigned int root = i;
+
+			cost = e[i * n + j - 1] + q[j + 1] + weight;
+			if(cost < minCost){
+				minCost = cost;
+				root = j;
+			}
+
+			for(unsigned int k = i + 1;k < j;++ k){
+				cost = e[i * n + k - 1] + e[(k + 1) + j] + weight;
+				if(cost < minCost){
+					minCost = cost;
+					root = k;
+				}
+			}
+
+			r[i * n + j] = root;
+			e[i * n + j] = minCost;
+			w[i * n + j] = weight;
+			++ i;
+			j = i + l;
+		}
+	}
+	delete[] e;
+	delete[] w;
 }
-int main(int argc, char *argv[]){
+void printOptimalBST(ostream &os, unsigned int *r, unsigned int n){
+	struct Print{
+		static void func(ostream& os, unsigned int i, unsigned int j, unsigned int n, unsigned int *r){
+			unsigned int root = r[i * n + j];
+			if(root != i){
+				os << "k" << r[i * n + (root - 1)] << " is the left child of k" << root << endl;
+				func(os, i, root - 1, n, r);
+			}else{
+				os << "d" << root << " is the left child of k" << i << endl;
+			}
+			if(root != j){
+				os << "k" << r[(root + 1) * n + j] << " is the right child of k" << root << endl;
+				func(os, root + 1, j, n, r);
+			}else{
+				os << "d" << (root + 1) << " is the right child of k" << root << endl;
+			}
+		}
+	};
+	Print::func(os, 0, n - 1, n, r);
+}
+}
+
+int test(int argc, char *argv[]){
 	//TestOne<DefaultBST> testPlot;
 	//AverageCost<DefaultBST> testPlot;	
 	/*TreePlot testPlot;
@@ -977,8 +1043,19 @@ int main(int argc, char *argv[]){
 	UIntValues vals(count, nums, false);
 	//plot.print();
 	BSTTreePlot<UIntValues> testPlot(vals);
+	AVLTree<unsigned int, unsigned int> avlTree;
 	
 	//AveTreeHeightPlot testPlot;
 	testPlot.run(argc, argv);
+	return 0;
+}
+
+int main(int argc, char *argv[]){
+	const unsigned int n = 5;
+	double p[n] = {0.15, 0.10, 0.05, 0.10, 0.20};
+	double q[n + 1] = {0.05, 0.10, 0.05, 0.05, 0.05, 0.10};
+	unsigned int r[n * n];
+	optimalBST(p, q, n, r);
+	printOptimalBST(cout, r, n);
 	return 0;
 }

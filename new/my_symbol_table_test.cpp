@@ -422,9 +422,24 @@ int testSymbolTables(int argc, char *argv[]){
 	return 0;
 }
 
+void josephusPermutation(unsigned int n, unsigned int m){
+	RBTree<unsigned int, bool> nums;
+	for(unsigned int i = 1;i <= n;++ i)
+		nums.put(i, false);
+	unsigned int start = 0;
+	while(n > 0){
+		start = ((start + m) % n - 1 + n) % n;
+		const unsigned int* val = nums.select(start);
+		cout << *val << ' ';
+		nums.remove(*val);
+		-- n;
+	}
+	cout << endl;
+}
 
 }
 int testSymbolTable(int argc, char *argv[]){
+	josephusPermutation(10, 8);
 	return testSymbolTables(argc, argv);
 }
 

@@ -716,6 +716,23 @@ struct BSTNodeBase{
 	}
 };
 
+template<class K, class V>
+struct BSTNode{
+	typedef BSTNode* NodePtr;
+	typedef std::pair<K, V> Pair;
+	NodePtr p, l, r;
+	unsigned int c;
+	Pair value;
+	BSTNode(const K& k, const V& v) : BSTNode(k, v, NodePtr(), NodePtr(), NodePtr(), 1){
+	}
+	BSTNode(const K& k, const V& v, NodePtr p, NodePtr l, NodePtr r, unsigned int count)
+		:p(p), l(l), r(r), c(count), value(Pair(k, v)){
+	}
+};
+template<class K, class V, class C = std::less<K> > 
+class BinarySearchTree : public BinarySearchTreeBase<K, V, BSTNodeTraits<K, V, BSTNode<K, V>, BSTNodeBase<BSTNode<K, V> > >, C>{
+};
+
 template<class RBNode>
 struct RBNodeBase : public BSTNodeBase<RBNode>{
 	typedef typename BSTNodeBase<RBNode>::NodePtr NodePtr;
@@ -755,22 +772,6 @@ struct RBNodeTraits : public BSTNodeTraits<K, V, RBNode, RBNodeBase>{
 };
 
 template<class K, class V>
-struct BSTNode{
-	typedef BSTNode* NodePtr;
-	typedef std::pair<K, V> Pair;
-	NodePtr p, l, r;
-	unsigned int c;
-	Pair value;
-	BSTNode(const K& k, const V& v) : BSTNode(k, v, NodePtr(), NodePtr(), NodePtr(), 1){
-	}
-	BSTNode(const K& k, const V& v, NodePtr p, NodePtr l, NodePtr r, unsigned int count)
-		:p(p), l(l), r(r), c(count), value(Pair(k, v)){
-	}
-};
-template<class K, class V, class C = std::less<K> > 
-class BinarySearchTree : public BinarySearchTreeBase<K, V, BSTNodeTraits<K, V, BSTNode<K, V>, BSTNodeBase<BSTNode<K, V> > >, C>{
-};
-template<class K, class V>
 struct RBNode{
 	typedef RBNode* NodePtr;
 	typedef std::pair<K, V> Pair;
@@ -792,7 +793,6 @@ private:
 	bool color = RED;
 };
 
-#include <iostream>
 template<class K, class V, class RBNodeTraitsParam, class C = std::less<K> >
 class RBTreeBase : public BinarySearchTreeBase<K, V, RBNodeTraitsParam, C>{
 	typedef BinarySearchTreeBase<K, V, RBNodeTraitsParam, C> Super;
@@ -837,7 +837,8 @@ public:
 			return false;
 		if(Super::root != NodePtr()){
 			if(RBNodeTraits::color(Super::root) != RBNodeTraits::black())
-				assert(false);//return false;
+				//assert(false);
+				return false;
 
 			std::vector<NodePtr> nodes;
 			std::vector<unsigned int> bhs;
@@ -852,7 +853,8 @@ public:
 				NodePtr r = RBNodeTraits::right(node);
 				if(RBNodeTraits::color(node) == RBNodeTraits::red() && (RBNodeTraits::color(r) != RBNodeTraits::black() || 
 					RBNodeTraits::color(l) != RBNodeTraits::black()))
-					assert(false);//return false;
+					//assert(false);
+					return false;
 				if(l != NodePtr()){
 					bhs.push_back(RBNodeTraits::color(l) == RBNodeTraits::black() ? (bhs[i] + 1) : bhs[i]);
 					nodes.push_back(l);
@@ -860,7 +862,8 @@ public:
 					bh = bhs[i];
 					isBhSet = true;
 				}else if(bhs[i] != bh)
-					assert(false);//return false;
+					//assert(false);
+					return false;
 				if(r != NodePtr()){
 					bhs.push_back(RBNodeTraits::color(r) == RBNodeTraits::black() ? (bhs[i] + 1) : bhs[i]);
 					nodes.push_back(r);
@@ -868,7 +871,8 @@ public:
 					bh = bhs[i];
 					isBhSet = true;
 				}else if(bhs[i] != bh)
-					assert(false);//return false;
+					//assert(false);
+					return false;
 				
 			}
 		}
@@ -901,7 +905,7 @@ protected:
 					Super::rightRotate(pp);
 					break;	
 				}
-			}else{
+			}else if(p == RBNodeTraits::right(pp)){
 				assert(p == RBNodeTraits::right(pp));
 				uncle = RBNodeTraits::left(pp);
 				if(RBNodeTraits::color(uncle) == RBNodeTraits::red()){
@@ -920,6 +924,8 @@ protected:
 					Super::leftRotate(pp);
 					break;
 				}
+			}else{
+				assert("corrupted data structure");
 			}
 			p = RBNodeTraits::parent(node);
 
@@ -1000,5 +1006,199 @@ protected:
 template<class K, class V, class C = std::less<K> > 
 class RBTree: public RBTreeBase<K, V, RBNodeTraits<K, V, RBNode<K, V>, RBNodeBase<RBNode<K, V> > >, C>{
 };
+
+template<class AVLNode>
+struct AVLNodeBase : public BSTNodeBase<AVLNode>{
+	typedef typename BSTNodeBase<AVLNode>::NodePtr NodePtr;
+	template<class Ptr>
+	static unsigned int height(Ptr node){
+		return node->h;
+	}
+	static void height(NodePtr node, unsigned int h){
+		assert(node != NodePtr());
+		node->h= h;
+	}
+
+	static void swap(NodePtr node1, NodePtr node2){
+		BSTNodeBase<AVLNode>::swap(node1, node2);
+		std::swap(node1->h, node2->h);
+	}
+};
+
+template<class K, class V, class AVLNode, class AVLNodeBase>
+struct AVLNodeTraits : public BSTNodeTraits<K, V, AVLNode, AVLNodeBase>{
+	template<class Ptr>
+	static int height(Ptr node){
+		if(node == Ptr())
+			return -1;
+		return AVLNodeBase::height(node);
+	}
+	template<class Ptr>
+	static void height(Ptr node, int h){
+		AVLNodeBase::height(node, h); 
+	}
+
+};
+
+template<class K, class V>
+struct AVLNode{
+	typedef AVLNode* NodePtr;
+	typedef std::pair<K, V> Pair;
+
+	AVLNode(const K& k, const V& v) : AVLNode(k, v, NodePtr(), NodePtr(), NodePtr(), 1){
+	}
+	AVLNode(const K& k, const V& v, NodePtr p, NodePtr l, NodePtr r, unsigned int count)
+		:value(k, v), p(p), l(l), r(r), c(count), h(0){
+	}
+private:
+	friend class AVLNodeBase<AVLNode<K, V> >;
+	friend class BSTNodeBase<AVLNode<K, V> >;
+	Pair value;
+	NodePtr p, l, r;
+	unsigned int c;
+	int h;
+};
+
+template<class K, class V, class AVLNodeTraitsParam, class C = std::less<K> >
+class AVLTreeBase : public BinarySearchTreeBase<K, V, AVLNodeTraitsParam, C>{
+	typedef BinarySearchTreeBase<K, V, AVLNodeTraitsParam, C> Super;
+public:
+	typedef typename Super::BSTNodeTraits AVLNodeTraits;
+	typedef typename Super::NodePtr NodePtr;
+	void put(const K& k, const V& v) override {
+		NodePtr node = Super::putInner(k, v);
+		if(node != NodePtr())
+			fixInsert(node);
+	}
+
+	void remove(const K&k) override {
+		NodePtr node = Super::removeInner(k);
+		if(node != NodePtr()){
+			assert(AVLNodeTraits::left(node) == NodePtr() || AVLNodeTraits::right(node) == NodePtr()); 
+			fixRemove(node);
+			AVLNodeTraits::deleteNode(node);
+		}
+	}
+
+	void removeMin() override {
+		NodePtr node = Super::removeMinInner();
+		if(node != NodePtr()){
+			assert(AVLNodeTraits::left(node) == NodePtr() || AVLNodeTraits::right(node) == NodePtr()); 
+			fixRemove(node);
+			AVLNodeTraits::deleteNode(node);
+		}
+	}
+
+	void removeMax() override {
+		NodePtr node = Super::removeMaxInner();
+		if(node != NodePtr()){
+			assert(AVLNodeTraits::left(node) == NodePtr() || AVLNodeTraits::right(node) == NodePtr()); 
+			fixRemove(node);
+			AVLNodeTraits::deleteNode(node);
+		}
+	}
+
+	bool isValid() const override {
+		if(!Super::isValid())
+			return false;
+		if(Super::root != NodePtr()){
+			std::vector<NodePtr> nodes;
+			nodes.push_back(Super::root);
+
+			for(size_t i = 0;i < nodes.size();++ i){
+				NodePtr node = nodes[i];
+				NodePtr l = AVLNodeTraits::left(node);
+				NodePtr r = AVLNodeTraits::right(node);
+				if(l == NodePtr()){
+					if(r == NodePtr()){
+						if(AVLNodeTraits::height(node) != 0)
+							//assert(false);
+							return false;
+					}else{
+						if(AVLNodeTraits::height(node) != AVLNodeTraits::height(r) + 1)
+							//assert(false);
+							return false;
+						if(AVLNodeTraits::height(r) != 0)
+							//assert(false);
+							return false;
+						nodes.push_back(r);
+					}
+				}else if(r == NodePtr()){
+					if(AVLNodeTraits::height(node) != AVLNodeTraits::height(l) + 1)
+						//assert(false);
+						return false;
+					if(AVLNodeTraits::height(l) != 0)
+						//assert(false);
+						return false;
+					nodes.push_back(l);
+				}else{
+					auto lH = AVLNodeTraits::height(l);
+					auto rH = AVLNodeTraits::height(r);
+					if(AVLNodeTraits::height(node) != std::max(lH, rH) + 1)
+						//assert(false);
+						return false;
+					if(lH > rH + 1 || rH > lH + 1)
+						//assert(false);
+						return false;
+				}
+			}
+		}
+		return true;
+	}
+protected:
+	void fixInsert(NodePtr node){
+		assert(AVLNodeTraits::color(node) == RBNodeTraits::red());
+		assert(AVLNodeTraits::left(node) == NodePtr());
+		assert(AVLNodeTraits::right(node) == NodePtr());
+		assert(AVLNodeTraits::height(node) == 0);
+		auto p = AVLNodeTraits::parent(node);
+		auto h = AVLNodeTraits::height(node) + 1;
+		if(p != NodePtr() && h > AVLNodeTraits::height(p)){
+			node = p;
+			p = AVLNodeTraits::parent(node);
+			while(p != NodePtr()){
+				if(node == AVLNodeTraits::left(p)){
+					auto sib = AVLNodeTraits::right(p);
+					auto deltaH = AVLNodeTraits(node) - AVLNodeTraits(sib);
+					if(deltaH > 1 || deltaH < -1){
+						assert(deltaH == 2 || deltaH == -2);
+						if(AVLNodeTraits::height(AVLNodeTraits::left(node)) + 1 == AVLNodeTraits::height(node)){
+							assert(AVLNodeTraits::height(AVLNodeTraits::right(node)) + 2 == AVLNodeTraits::height(node) ||
+								AVLNodeTraits::height(AVLNodeTraits::right(node)) + 1 == AVLNodeTraits::height(node));
+							AVLNodeTraits::rightRotate(p);
+							h = AVLNodeTraits::height(AVLNodeTraits::left(p)) + 1;
+							if(h < AVLNodeTraits::height(p)){
+								AVLNodeTraits::height(p, h);
+								break;
+							}
+							AVLNodeTraits::height(node, h + 1);
+						}else{
+							assert(AVLNodeTraits::height(AVLNodeTraits::left(node)) + 2 == AVLNodeTraits::height(node));
+							assert(AVLNodeTraits::height(AVLNodeTraits::right(node)) + 1 == AVLNodeTraits::height(node));
+						}
+					}
+				}else if(ndoe == AVLNodeTraits::right(p)){
+					auto sib = AVLNodeTraits::right(p);
+					auto deltaH = AVLNodeTraits(node) - AVLNodeTraits(sib);
+					if(deltaH > 1 || deltaH < -1){
+
+					}
+				}else{
+					assert("corrupted data structure");
+				}
+				p = AVLNodeTraits::parent(node);
+			}
+		}
+	}
+
+	void fixRemove(NodePtr node){
+	}
+
+};
+
+template<class K, class V, class C = std::less<K> > 
+class AVLTree: public AVLTreeBase<K, V, AVLNodeTraits<K, V, AVLNode<K, V>, AVLNodeBase<AVLNode<K, V> > >, C>{
+};
+
 }
 #endif //MY_BINARY_SEARCH_TREE_H
