@@ -17,16 +17,16 @@ protected:
 		C comparator;
 		CompareKey(const C& comparator) : comparator(comparator){
 		}
-		bool operator()(const Pair& p1, const Pair& p2){
+		bool operator()(const Pair& p1, const Pair& p2) const {
 			return comparator(p1.first, p2.first);
 		}
-		bool operator()(const K& k1, const K& k2){
+		bool operator()(const K& k1, const K& k2) const {
 			return comparator(k1, k2);
 		}
-		bool operator()(const Pair& p, const K& k){
+		bool operator()(const Pair& p, const K& k) const {
 			return comparator(p.first, k);
 		}
-		bool operator()(const K& k, const Pair& p){
+		bool operator()(const K& k, const Pair& p) const {
 			return comparator(k, p.first);
 		}
 	};
@@ -43,7 +43,7 @@ protected:
 		void next() override {
 			++itor;
 		}
-		
+	
 		bool equals(const typename Super::IteratorImpl& i) const {
 			const BinSearchIteratorImpl *p = dynamic_cast<const BinSearchIteratorImpl*>(&i);
 			assert(p != nullptr);
@@ -172,13 +172,26 @@ public:
 		return 0;
 	}
 
-	void clear() override {
-		table.clear();
-	}
-	
-	const C& getComparator() const {
-		return compareKey.comparator;
-	}
+	bool isValid() const override {
+		auto s = table.begin(), e = table.end();
+		auto s0 = s;
+		++ s;
+		while(s != e){
+			if(compareKey(*s, *s0))
+return false;
+		++ s;
+		++ s0;
+}
+return true;
+}
+
+void clear() override {
+table.clear();
+}
+
+const C& getComparator() const {
+	return compareKey.comparator;
+}
 
 };
 }

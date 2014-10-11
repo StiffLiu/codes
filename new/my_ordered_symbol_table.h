@@ -66,6 +66,10 @@ public:
 	 * Number of keys in the range [{@var l}, {@var h}].
 	 */
 	virtual unsigned int size(const K& l, const K& h) const = 0;
+
+	virtual bool isValid() const{
+		return true;
+	}
 };
 }
 #endif //MY_ORDERED_SYMBOL_TABLE_H

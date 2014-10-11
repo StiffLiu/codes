@@ -4,7 +4,9 @@
 #include <utility>
 #include <vector>
 #include <cassert>
-#include <iostream>
+//#include <iostream>
+#include <algorithm>
+#include <memory>
 
 namespace my_lib{
 template<class K, class V, class BSTNodeTraitsParam, class C = std::less<K> > 
@@ -159,6 +161,31 @@ public:
 		return BSTNodeTraits::safeCount(root);
 	}
 
+	virtual int height() const{
+		if(root == NodePtr())
+			return -1;
+
+		std::vector<NodePtr> parents;
+		int height = 0;
+		parents.push_back(root);
+
+		while(!parents.empty()){
+			std::vector<NodePtr> childs;
+			for(size_t i = 0;i < parents.size();++ i){
+				auto p = parents[i];
+				auto r = BSTNodeTraits::right(p), l = BSTNodeTraits::left(p);
+				if(r != NodePtr())
+					childs.push_back(r);
+				if(l != NodePtr())
+					childs.push_back(l);
+
+			}
+			parents.swap(childs);
+			++ height;
+		}
+		return height - 1;
+	}
+
 	unsigned int size(const K& l, const K& h) const override{
 		unsigned int i = rank(l), j = rank(h);
 		if(i > j)
@@ -192,7 +219,7 @@ public:
 	/**
 	 * @return true if the data structure is valid.
 	 */
-	virtual bool isValid() const{
+	bool isValid() const override {
 		return root == NodePtr() || 
 			(BSTNodeTraits::parent(root) == NodePtr() && BSTNodeTraits::isValid(root));
 	}
@@ -1011,10 +1038,12 @@ template<class AVLNode>
 struct AVLNodeBase : public BSTNodeBase<AVLNode>{
 	typedef typename BSTNodeBase<AVLNode>::NodePtr NodePtr;
 	template<class Ptr>
-	static unsigned int height(Ptr node){
+	static int height(Ptr node){
+		if(node == Ptr())
+			return -1;
 		return node->h;
 	}
-	static void height(NodePtr node, unsigned int h){
+	static void height(NodePtr node, int h){
 		assert(node != NodePtr());
 		node->h= h;
 	}
@@ -1029,8 +1058,6 @@ template<class K, class V, class AVLNode, class AVLNodeBase>
 struct AVLNodeTraits : public BSTNodeTraits<K, V, AVLNode, AVLNodeBase>{
 	template<class Ptr>
 	static int height(Ptr node){
-		if(node == Ptr())
-			return -1;
 		return AVLNodeBase::height(node);
 	}
 	template<class Ptr>
@@ -1098,6 +1125,12 @@ public:
 		}
 	}
 
+	int height() const override {
+		if(Super::root == NodePtr())
+			return -1;
+		return AVLNodeTraits::height(Super::root);
+	}
+
 	bool isValid() const override {
 		if(!Super::isValid())
 			return false;
@@ -1109,37 +1142,22 @@ public:
 				NodePtr node = nodes[i];
 				NodePtr l = AVLNodeTraits::left(node);
 				NodePtr r = AVLNodeTraits::right(node);
-				if(l == NodePtr()){
-					if(r == NodePtr()){
-						if(AVLNodeTraits::height(node) != 0)
-							//assert(false);
-							return false;
-					}else{
-						if(AVLNodeTraits::height(node) != AVLNodeTraits::height(r) + 1)
-							//assert(false);
-							return false;
-						if(AVLNodeTraits::height(r) != 0)
-							//assert(false);
-							return false;
-						nodes.push_back(r);
-					}
-				}else if(r == NodePtr()){
-					if(AVLNodeTraits::height(node) != AVLNodeTraits::height(l) + 1)
-						//assert(false);
-						return false;
-					if(AVLNodeTraits::height(l) != 0)
-						//assert(false);
-						return false;
+				if(l != NodePtr()){
 					nodes.push_back(l);
-				}else{
-					auto lH = AVLNodeTraits::height(l);
-					auto rH = AVLNodeTraits::height(r);
-					if(AVLNodeTraits::height(node) != std::max(lH, rH) + 1)
-						//assert(false);
-						return false;
-					if(lH > rH + 1 || rH > lH + 1)
-						//assert(false);
-						return false;
+				}
+				if(r != NodePtr()){
+					nodes.push_back(r);
+				}
+				auto lH = AVLNodeTraits::height(l);
+				auto rH = AVLNodeTraits::height(r);
+				if(AVLNodeTraits::height(node) != std::max(lH, rH) + 1){
+					//std::cout << "key : " << *AVLNodeTraits::key(node) << std::endl;
+					assert(false);
+					return false;
+				}
+				if(lH > rH + 1 || rH > lH + 1){
+					assert(false);
+					return false;
 				}
 			}
 		}
@@ -1147,57 +1165,491 @@ public:
 	}
 protected:
 	void fixInsert(NodePtr node){
-		assert(AVLNodeTraits::color(node) == RBNodeTraits::red());
 		assert(AVLNodeTraits::left(node) == NodePtr());
 		assert(AVLNodeTraits::right(node) == NodePtr());
 		assert(AVLNodeTraits::height(node) == 0);
 		auto p = AVLNodeTraits::parent(node);
 		auto h = AVLNodeTraits::height(node) + 1;
 		if(p != NodePtr() && h > AVLNodeTraits::height(p)){
+			AVLNodeTraits::height(p, h);
 			node = p;
 			p = AVLNodeTraits::parent(node);
 			while(p != NodePtr()){
 				if(node == AVLNodeTraits::left(p)){
 					auto sib = AVLNodeTraits::right(p);
-					auto deltaH = AVLNodeTraits(node) - AVLNodeTraits(sib);
-					if(deltaH > 1 || deltaH < -1){
+					auto deltaH = AVLNodeTraits::height(node) - AVLNodeTraits::height(sib);
+					if(deltaH < -1 || deltaH > 1){
 						assert(deltaH == 2 || deltaH == -2);
 						if(AVLNodeTraits::height(AVLNodeTraits::left(node)) + 1 == AVLNodeTraits::height(node)){
 							assert(AVLNodeTraits::height(AVLNodeTraits::right(node)) + 2 == AVLNodeTraits::height(node) ||
 								AVLNodeTraits::height(AVLNodeTraits::right(node)) + 1 == AVLNodeTraits::height(node));
-							AVLNodeTraits::rightRotate(p);
+							Super::rightRotate(p);
 							h = AVLNodeTraits::height(AVLNodeTraits::left(p)) + 1;
+							if(h < AVLNodeTraits::height(p)){
+								AVLNodeTraits::height(p, h);
+								break;
+							}
+							assert(h == AVLNodeTraits::height(p));
+							AVLNodeTraits::height(node, h + 1);
+						}else{
+							auto r = AVLNodeTraits::right(node);
+							h = AVLNodeTraits::height(r);
+							assert(AVLNodeTraits::height(AVLNodeTraits::left(node)) + 2 == AVLNodeTraits::height(node));
+							assert(h + 1 == AVLNodeTraits::height(node));
+							Super::leftRotate(node);
+							Super::rightRotate(p);
+							AVLNodeTraits::height(r, h + 1);
+							AVLNodeTraits::height(node, h);
+							AVLNodeTraits::height(p, h);
+							break;
+						
+						}
+					}else{
+						h = AVLNodeTraits::height(node) + 1;
+						if(h <= AVLNodeTraits::height(p)){
+							assert(h == AVLNodeTraits::height(p));
+							break;
+						}
+						AVLNodeTraits::height(p, h);
+						node = p;
+					}
+					
+				}else{
+					assert(node == AVLNodeTraits::right(p) && "corrupted data structure" != nullptr);
+					auto sib = AVLNodeTraits::left(p);
+					auto deltaH = AVLNodeTraits::height(node) - AVLNodeTraits::height(sib);
+					if(deltaH < -1 || deltaH > 1){
+						assert(deltaH == 2 || deltaH == -2);
+						if(AVLNodeTraits::height(AVLNodeTraits::right(node)) + 1 == AVLNodeTraits::height(node)){
+							assert(AVLNodeTraits::height(AVLNodeTraits::left(node)) + 2 == AVLNodeTraits::height(node) ||
+								AVLNodeTraits::height(AVLNodeTraits::left(node)) + 1 == AVLNodeTraits::height(node));
+							Super::leftRotate(p);
+							h = AVLNodeTraits::height(AVLNodeTraits::right(p)) + 1;
 							if(h < AVLNodeTraits::height(p)){
 								AVLNodeTraits::height(p, h);
 								break;
 							}
 							AVLNodeTraits::height(node, h + 1);
 						}else{
-							assert(AVLNodeTraits::height(AVLNodeTraits::left(node)) + 2 == AVLNodeTraits::height(node));
-							assert(AVLNodeTraits::height(AVLNodeTraits::right(node)) + 1 == AVLNodeTraits::height(node));
+							auto l = AVLNodeTraits::left(node);
+							h = AVLNodeTraits::height(l);
+							assert(AVLNodeTraits::height(AVLNodeTraits::right(node)) + 2 == AVLNodeTraits::height(node));
+							assert(h + 1 == AVLNodeTraits::height(node));
+							Super::rightRotate(node);
+							Super::leftRotate(p);
+							AVLNodeTraits::height(l, h + 1);
+							AVLNodeTraits::height(node, h);
+							AVLNodeTraits::height(p, h);
+							break;
 						}
+					}else{
+						h = AVLNodeTraits::height(node) + 1;
+						if(h <= AVLNodeTraits::height(p)){
+							assert(h == AVLNodeTraits::height(p));
+							break;
+						}
+						AVLNodeTraits::height(p, h);
+						node = p;
 					}
-				}else if(ndoe == AVLNodeTraits::right(p)){
-					auto sib = AVLNodeTraits::right(p);
-					auto deltaH = AVLNodeTraits(node) - AVLNodeTraits(sib);
-					if(deltaH > 1 || deltaH < -1){
-
-					}
-				}else{
-					assert("corrupted data structure");
 				}
 				p = AVLNodeTraits::parent(node);
 			}
 		}
+		//assert(isValid());
 	}
 
 	void fixRemove(NodePtr node){
+		auto p = AVLNodeTraits::parent(node);
+		if(p != NodePtr()){
+			{
+				NodePtr l = AVLNodeTraits::left(p);
+				NodePtr r = AVLNodeTraits::right(p);
+				if(AVLNodeTraits::height(l) > AVLNodeTraits::height(r) + 1){
+					node = r;
+				}else if(AVLNodeTraits::height(r) > AVLNodeTraits::height(l) + 1){
+					node = l;
+				}else{
+					auto h = std::max(AVLNodeTraits::height(r), AVLNodeTraits::height(l)) + 1;
+					if(h >= AVLNodeTraits::height(p)){
+						assert(h == AVLNodeTraits::height(p));
+						assert(isValid());
+						return;
+					}
+					AVLNodeTraits::height(p, h);
+					node = p;
+					p = AVLNodeTraits::parent(node);
+				}
+			}
+			while(p != NodePtr()){
+				auto h = AVLNodeTraits::height(node);
+				/*if(node != NodePtr())
+					std::cout << "key to adjust : " << *AVLNodeTraits::key(node) << std::endl;
+				std::cout << "parent key : " << *AVLNodeTraits::key(p) << std::endl;
+				if(AVLNodeTraits::parent(p) != NodePtr()){
+					std::cout << "parent of parent key : " << *AVLNodeTraits::key(AVLNodeTraits::parent(p)) << std::endl;
+				}*/
+				if(node == AVLNodeTraits::left(p)){
+					auto sib = AVLNodeTraits::right(p);
+					auto sibH = AVLNodeTraits::height(sib);
+					auto deltaH = h - sibH;
+					/*if(sib != NodePtr())
+						std::cout << "right sib key : " << *AVLNodeTraits::key(sib) << std::endl;*/
+					if(deltaH < -1 || deltaH > 1){
+						assert(deltaH == 2 || deltaH == -2);
+						/*if(AVLNodeTraits::right(sib) != NodePtr())
+							std::cout << "right child of right sib key : " << *AVLNodeTraits::key(AVLNodeTraits::right(sib)) << std::endl;
+						if(AVLNodeTraits::left(sib) != NodePtr())
+							std::cout << "left child of right sib key : " << *AVLNodeTraits::key(AVLNodeTraits::left(sib)) << std::endl;*/
+						if(AVLNodeTraits::height(AVLNodeTraits::right(sib)) + 1 == sibH){
+							Super::leftRotate(p);
+
+							if(h + 1 == AVLNodeTraits::height(AVLNodeTraits::right(p))){
+								AVLNodeTraits::height(p, h + 2);
+								AVLNodeTraits::height(sib, h + 3);
+								break;
+							}
+							AVLNodeTraits::height(p, h + 1);
+							AVLNodeTraits::height(sib, h + 2);
+							node = sib;
+						}else{
+							Super::rightRotate(sib);
+							Super::leftRotate(p);
+							AVLNodeTraits::height(sib, h + 1);
+							AVLNodeTraits::height(p, h + 1);
+							node = AVLNodeTraits::parent(p);
+							AVLNodeTraits::height(node, h + 2);
+						}
+					}else{
+						h = std::max(h, sibH) + 1;
+						if(h >= AVLNodeTraits::height(p)){
+							assert(h == AVLNodeTraits::height(p));
+							break;
+						}
+						AVLNodeTraits::height(p, h);
+						node = p;
+					}
+					
+				}else{
+					assert(node == AVLNodeTraits::right(p));
+					auto sib = AVLNodeTraits::left(p);
+					auto sibH = AVLNodeTraits::height(sib);
+					auto deltaH = h - sibH;
+					/*if(sib != NodePtr())
+						std::cout << "left sib key : " << *AVLNodeTraits::key(sib) << std::endl;*/
+					if(deltaH < -1 || deltaH > 1){
+						assert(deltaH == 2 || deltaH == -2);
+						/*if(AVLNodeTraits::left(sib) != NodePtr())
+							std::cout << "left child of left sib key : " << *AVLNodeTraits::key(AVLNodeTraits::left(sib)) << std::endl;
+						if(AVLNodeTraits::right(sib) != NodePtr())
+							std::cout << "right child of left sib key : " << *AVLNodeTraits::key(AVLNodeTraits::right(sib)) << std::endl;*/
+						if(AVLNodeTraits::height(AVLNodeTraits::left(sib)) + 1 == sibH){
+							Super::rightRotate(p);
+
+							if(h + 1 == AVLNodeTraits::height(AVLNodeTraits::left(p))){
+								AVLNodeTraits::height(p, h + 2);
+								AVLNodeTraits::height(sib, h + 3);
+								break;
+							}
+							AVLNodeTraits::height(p, h + 1);
+							AVLNodeTraits::height(sib, h + 2);
+							node = sib;
+						}else{
+							Super::leftRotate(sib);
+							Super::rightRotate(p);
+							AVLNodeTraits::height(sib, h + 1);
+							AVLNodeTraits::height(p, h + 1);
+							node = AVLNodeTraits::parent(p);
+							AVLNodeTraits::height(node, h + 2);
+						}
+					}else{
+						h = std::max(h, sibH) + 1;
+						if(h >= AVLNodeTraits::height(p)){
+							assert(h == AVLNodeTraits::height(p));
+							break;
+						}
+						AVLNodeTraits::height(p, h);
+						node = p;
+					}
+				}
+				p = AVLNodeTraits::parent(node);
+			}
+		}
+		assert(isValid());
 	}
 
 };
 
 template<class K, class V, class C = std::less<K> > 
 class AVLTree: public AVLTreeBase<K, V, AVLNodeTraits<K, V, AVLNode<K, V>, AVLNodeBase<AVLNode<K, V> > >, C>{
+};
+
+template<class K, class V, unsigned int NUM>
+class BTreeNode{
+public:
+	BTreeNode() : n(0), parent(nullptr){
+	}
+	BTreeNode(const K& k, const V& v){
+		new(keys)K(k);
+		new(values)V(v);
+		children[0] = children[1] = nullptr;
+		parent = nullptr;
+		n = 1;
+	}
+	BTreeNode(const BTreeNode& node, unsigned int start, unsigned int count, BTreeNode *p){
+		unsigned int end = start + count;
+		for(n = 0;n < N && start < end;++ n){
+			new(&keys[n * sizeof(K)])K(node.keys[start]);
+			new(&values[n * sizeof(V)])V(node.values[start]);
+			children[n] = p->children[start];
+		}
+		children[n] = p->children[start];
+		parent = p;
+	}
+	BTreeNode* split(unsigned int n1, unsigned int index){
+		assert(n1 + 1 < n);
+		if(n1 > 0 && n1 + 1 < n){
+			if(parent == nullptr){
+				parent = new BTreeNode(*this, n1, 1, parent);
+				parent->children[0] =this;
+				index = 0;
+			}else{
+				assert(parent->n < N);
+				assert(parent->children[index] == this);
+				if(parent->children[index] != this)
+					return nullptr;
+				parent->insert(((K*)keys)[n1], ((V*)values)[n1], index);
+			}
+			parent->children[index + 1] = new BTreeNode(*this, n1 + 1, n - n1 - 1, parent);
+			std::for_each(((K*)keys) + n1, ((K*)keys) + n, [](K& k){k.~K();});
+			std::for_each(((V*)values) + n1, ((V*)values) + n, [](V& v){v.~V();});
+			this->n = n1;
+		}
+		return parent;
+	}
+	BTreeNode* safeSplit(unsigned int index){
+		if(n >= N)
+			return split(n - 2, index);
+		return this;
+	}
+	unsigned int getCount(){
+		return n;
+	}
+	bool insert(const K&k, const V& v, unsigned int index){
+		assert(n < N);
+		assert(index < N);
+		if(n >= N)
+			return false;
+		std::copy_backward((K*)keys + index, (K*)keys + n, (K*)keys + n + 1);
+		std::copy_backward((V*)values + index, (V*)values + n, (V*)values + n + 1);
+		std::copy_backward(children + index + 1, children + n + 1, children + n + 2);
+
+		children[index + 1] = nullptr;
+		((K*)keys)[index] = k;
+		((V*)values)[index] = v;
+		++n;
+		return true;
+		
+	}
+	K* getKeys(){
+		return (K*)keys;
+	}
+	V* getValues(){
+		return (V*)values;
+	}
+	const K* getKeys() const {
+		return (const K*)keys;
+	}
+	const V* getValues() const {
+		return (const V*)values;
+	}
+	BTreeNode * const *getChildren() const {
+		return children;
+	}
+	bool isLeaf() const {
+		return std::all_of(children, children + n, 
+			[](BTreeNode *p){return p == nullptr;});
+	}
+	~BTreeNode(){
+		std::for_each(((K*)keys), ((K*)keys) + n, [](K& k){k.~K();});
+		std::for_each(((V*)values), ((V*)values) + n, [](V& v){v.~V();});
+	}
+	static const unsigned int N = NUM;
+private:
+	static_assert(NUM > 2, "number of nodes in a BTree must be greater than 2");
+	char keys[N * sizeof(K)];
+	char values[N * sizeof(V)];
+	BTreeNode *children[N + 1];	
+	BTreeNode *parent;
+	unsigned int n;
+};
+
+template<class K, class V, class C = std::less<K> >
+class BTreeBase : public OrderedSymbolTable<K, V>{
+	typedef OrderedSymbolTable<K, V> Super;
+public:
+	//typedef BNodeTraitsParam BSTNodeTraits;
+	typedef BTreeNode<K, V, 5> Node;
+	typedef Node* NodePtr;
+	
+	void put(const K& k, const V& v) override {
+		if(root == NodePtr()){
+			root = new Node(k, v);
+			return;
+		}
+		NodePtr node = root;
+		unsigned int index = 0;
+		while(true){
+			node = node->safeSplit(index);
+
+			const K* keys = node->getKeys();
+			unsigned int count = node->getCount();
+			index = std::lower_bound(keys, keys + count, k, comparator) - keys;
+			assert(count > 0 && count < Node::N);
+			if(index < count && !comparator(k, keys[index]))
+					return;
+			
+			auto children = node->getChildren();
+			if(children[index] == NodePtr()){
+				assert(node->isLeaf());
+				node->insert(k, v, index);				
+				break;
+			}
+			node = children[index];
+		}
+	}
+
+	const V* get(const K& k) const override {
+		NodePtr node = root;
+		while(node != NodePtr()){
+			auto keys = node->getKeys();
+			auto count = node->getCount();
+			unsigned int index = std::lower_bound(keys, keys + count, k, comparator) - keys;
+			assert(count > 0 && count < Node::N);
+			if(index < count && !comparator(k, keys[index]))
+					return node->getValues() + index;
+			node = node->getChildren()[index];
+		}
+		return nullptr;
+	}
+
+	void remove(const K& k) override {
+	}
+
+	unsigned int size() const override {
+		if(root == NodePtr()){
+			return 0;
+		}
+		return 0;
+	}
+
+	void clear() override {
+	}
+
+	const K* min() const override {
+		if(root == NodePtr())
+			return nullptr;
+		NodePtr node = root;
+		const K* minKey = nullptr;
+		while(node ){
+			auto count = node->getCount();
+			minKey = &node->getKeys()[0];
+			assert(count > 0 && count < Node::N);
+			node = node->getChildren()[0];
+		}
+		return minKey;
+	}
+	
+	const K* max() const override {
+		if(root == NodePtr())
+			return nullptr;
+		NodePtr node = root;
+		const K* maxKey = nullptr;
+		while(node ){
+			auto count = node->getCount();
+			maxKey = &node->getKeys()[count - 1];
+			assert(count > 0 && count < Node::N);
+			node = node->getChildren()[count - 1];
+		}
+		return maxKey;
+	}
+
+	const K* floor(const K& k) const override {
+		const K* key = nullptr;
+		auto node = root;
+		while(node != NodePtr()){
+			auto keys = node->getKeys();
+			auto count = node->getCount();
+			unsigned int index = std::lower_bound(keys, keys + count, k, comparator) - keys;
+			if(index > 0)
+				key = &keys[index - 1];
+			if(index < count && !comparator(k, keys[index]))
+				return &keys[index];
+			node = node->getChildren()[index];
+		}
+		return key;
+	}
+	
+	const K* ceil(const K& k) const override {
+		const K* key = nullptr;
+		auto node = root;
+		while(node != NodePtr()){
+			auto keys = node->getKeys();
+			auto count = node->getCount();
+			unsigned int index = std::lower_bound(keys, keys + count, k, comparator) - keys;
+			if(index < count){
+			        if(!comparator(k, keys[index]))
+					return &keys[index];
+				key = &keys[index];
+			}
+			node = node->getChildren()[index];
+		}
+		return key;
+	}
+	
+	unsigned int rank(const K& k) const override {
+		return 0;
+	}
+
+	const K* select(unsigned int index) const override {
+		return nullptr;
+	}	
+
+	void removeMin() override {
+		const K* k = min();
+		if(k != nullptr)
+			remove(*k);
+	}
+
+	void removeMax() override {
+		const K* k = max();
+		if(k != nullptr)
+			remove(*k);
+	}
+
+	unsigned int size(const K& l, const K& h) const override {
+		unsigned int i = rank(l), j = rank(h);
+		if(i > j)
+			return 0;
+		if(get(h) != nullptr)
+			return j - i + 1;
+		return j - i;
+	}	
+
+	virtual bool isValid() const{
+		return true;
+	}
+protected:
+	typename Super::IteratorImpl *implBegin() const override{
+		return nullptr;
+	}
+
+	typename Super::IteratorImpl *implEnd() const override{
+		return nullptr;
+	}	
+private:
+	NodePtr root;
+	C comparator;
+
 };
 
 }

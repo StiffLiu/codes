@@ -611,30 +611,6 @@ public:
 	NodePtr getRoot(){
 		return Super::root;
 	}
-	unsigned int height(){
-		vector<NodePtr> parents;
-		unsigned int height = 0;
-		if(Super::root == NodePtr())
-			return 0;
-
-		parents.push_back(Super::root);
-
-		while(!parents.empty()){
-			vector<NodePtr> childs;
-			for(size_t i = 0;i < parents.size();++ i){
-				NodePtr p = parents[i];
-				NodePtr r = BSTNodeTraits::right(p), l = BSTNodeTraits::left(p);
-				if(r != NodePtr())
-					childs.push_back(r);
-				if(l != NodePtr())
-					childs.push_back(l);
-
-			}
-			parents.swap(childs);
-			++ height;
-		}
-		return height - 1;
-	}
 };
 
 template<class T>
@@ -683,7 +659,7 @@ Node *randTree(unsigned int n){
 
 template<class T>
 class BSTTreePlot : public TreePlot{
-	typedef ForTestBST<unsigned int, unsigned int, RBTree> BST;
+	typedef ForTestBST<unsigned int, unsigned int, AVLTree> BST;
 	typedef typename BST::NodePtr NodePtr;
 	BST bst;
 	mutable string str;
@@ -708,6 +684,7 @@ public:
 
 		calculate(bst.getRoot(),
 			NodeTraitsAdaptor<BST::BSTNodeTraits>());
+		cout << "height : " << bst.height() << endl;
 	}
 protected:
 	const char* getString(unsigned int index) const override{
@@ -935,12 +912,14 @@ public:
 struct UIntValues{
 	unsigned int count;
 	unsigned int *values;
-	UIntValues(unsigned int count, unsigned int *values, bool isRandom = true)
+	enum Type{RANDOM, ORDERED, OPTIMAL};
+	UIntValues(unsigned int count, unsigned int *values, Type type)
 		:count(count), values(values){
-		if(isRandom){
+		if(type != OPTIMAL){
 			for(unsigned int i = 0;i < count;++ i)
 				values[i] = i;
-			std::random_shuffle(values, values + count);
+			if(type == RANDOM)
+				std::random_shuffle(values, values + count);
 		}else{
 			std::queue<unsigned int> intervals;
 			intervals.push(0);
@@ -1040,17 +1019,16 @@ int test(int argc, char *argv[]){
 	testPlot.calculate(tree, NodeAdaptor());*/
 	unsigned int count = 100;
 	unsigned int nums[count];
-	UIntValues vals(count, nums, false);
+	UIntValues vals(count, nums, UIntValues::RANDOM);
 	//plot.print();
 	BSTTreePlot<UIntValues> testPlot(vals);
-	AVLTree<unsigned int, unsigned int> avlTree;
 	
 	//AveTreeHeightPlot testPlot;
 	testPlot.run(argc, argv);
 	return 0;
 }
 
-int main(int argc, char *argv[]){
+int test1(int argc, char *argv[]){
 	const unsigned int n = 5;
 	double p[n] = {0.15, 0.10, 0.05, 0.10, 0.20};
 	double q[n + 1] = {0.05, 0.10, 0.05, 0.05, 0.05, 0.10};
@@ -1058,4 +1036,8 @@ int main(int argc, char *argv[]){
 	optimalBST(p, q, n, r);
 	printOptimalBST(cout, r, n);
 	return 0;
+}
+
+int main(int argc, char *argv[]){
+	return test(argc, argv);
 }

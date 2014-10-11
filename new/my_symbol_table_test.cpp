@@ -93,7 +93,7 @@ struct MemAllocator{
 	}
 };
 }
-void* operator new(unsigned int size){
+void* operator new(size_t size){
 	return MemAllocator::allocate(size);
 }
 void operator delete(void *p){
@@ -190,10 +190,6 @@ void testRotate(T& t){
 	}
 }
 void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
-	BinarySearchTree<KeyType, ValueType>* bst = 
-		dynamic_cast<BinarySearchTree<KeyType, ValueType>*>(&ost);
-	RBTree<KeyType, ValueType> *rbBst = 
-		dynamic_cast<RBTree<KeyType, ValueType>*>(&ost);
 	const unsigned int count = 100;
 	double nums[count];
 	unsigned int indices[count];
@@ -208,8 +204,7 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 	assert(ost.size() == 0);
 	for(unsigned int i = 0;i < count;++ i){
 		ost.put(nums[indices[i]], nums[indices[i]]);
-		assert(bst == nullptr || bst->isValid());
-		assert(rbBst == nullptr || rbBst->isValid());
+		assert(ost.isValid());
 	}
 
 	for(unsigned int i = 0;i < count;++ i){
@@ -260,8 +255,8 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 	for(unsigned int i = 0;i < toRemove;++ i){
 		assert(nums[i] == *ost.min());
 		ost.removeMin();
-		assert(bst == nullptr || bst->isValid());
-		assert(rbBst == nullptr || rbBst->isValid());
+		assert(ost.isValid());
+		assert(!ost.contains(nums[i]));
 	}
 	
 
@@ -273,8 +268,7 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 	for(unsigned int i = count - 1, j = 0;j < toRemove;--i, ++ j){
 		assert(nums[i] == *ost.max());
 		ost.removeMax();
-		assert(bst == nullptr || bst->isValid());
-		assert(rbBst == nullptr || rbBst->isValid());
+		assert(ost.isValid());
 		assert(!ost.contains(nums[i]));
 	}
 
@@ -293,8 +287,7 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 	index = ost.size();
 	for(unsigned int i = toRemove + 4;i < count - toRemove;i += 2){
 		ost.remove(nums[i]);
-		assert(bst == nullptr || bst->isValid());
-		assert(rbBst == nullptr || rbBst->isValid());
+		assert(ost.isValid());
 		--index;
 	}
 	
@@ -379,6 +372,22 @@ public:
 		return Super::rightRotate(n);
 	}	
 };
+template<class BST>
+int testBST(BST& bst, const char *name){
+	cout << "------------" << name << "---------------" << endl;
+	assert(bst.isValid());
+	fillSymbolTable(bst);
+	assert(bst.isValid());
+	validateIterator(bst);
+	assert(bst.isValid());
+	validateOrderedSymbolTable(bst);
+	assert(bst.isValid());
+	validateSymbolTable(bst);
+	assert(bst.isValid());
+	moreOrderedTest(bst);
+	return 0;
+}
+
 int testSymbolTables(int argc, char *argv[]){
 	ListSymbolTable<KeyType, ValueType> listST;
 	cout << "-----------symbol table with sequential search implementation---------------" << endl;
@@ -392,31 +401,15 @@ int testSymbolTables(int argc, char *argv[]){
 	validateOrderedSymbolTable(binST);
 	validateSymbolTable(binST);
 	moreOrderedTest(binST);
-	cout << "------------binary search tree---------------" << endl;
+
 	TestBST bst;
-	assert(bst.isValid());
-	fillSymbolTable(bst);
-	assert(bst.isValid());
-	validateIterator(bst);
-	assert(bst.isValid());
-	validateOrderedSymbolTable(bst);
-	assert(bst.isValid());
-	validateSymbolTable(bst);
-	assert(bst.isValid());
-	moreOrderedTest(bst);
+	testBST(bst, "binary search tree");
 	testRotate(bst);
-	cout << "--------------red black tree----------------" << endl;
 	RBTree<KeyType, ValueType> rbTree;
-	assert(rbTree.isValid());
-	fillSymbolTable(rbTree);
-	assert(rbTree.isValid());
-	validateIterator(rbTree);
-	assert(rbTree.isValid());
-	validateOrderedSymbolTable(rbTree);
-	assert(rbTree.isValid());
-	validateSymbolTable(rbTree);
-	assert(rbTree.isValid());
-	moreOrderedTest(rbTree);
+	testBST(rbTree, "red black tree");
+	AVLTree<KeyType, ValueType> avlTree;
+	testBST(avlTree, "AVL tree");
+	BTreeBase<KeyType, ValueType> bTree;
 	//doublingTestOfSymbolTable();
 	cout << "--------------end of all tests---------------" << endl;
 	return 0;

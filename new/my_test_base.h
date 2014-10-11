@@ -90,34 +90,34 @@ namespace my_lib{
 			std::vector<unsigned int> edges;
 			std::vector<double> points;
 			template<class T, class F>
-				void calculate(T t, F f, double lB, double interval, double hInterval){
-					std::vector<NodePosition> positions;
-					positions.push_back(NodePosition());
-					calculate(t, f, 0, lB, interval, positions);
+			void calculate(T t, F f, double lB, double interval, double hInterval){
+				std::vector<NodePosition> positions;
+				positions.push_back(NodePosition());
+				calculate(t, f, 0, lB, interval, positions);
 
-					std::vector<unsigned int> nodes;
-					nodes.push_back(0);
-					points.push_back(positions[0].pos());
-					points.push_back(0.0);
+				std::vector<unsigned int> nodes;
+				nodes.push_back(0);
+				points.push_back(positions[0].pos());
+				points.push_back(0.0);
 
-					for(size_t i = 0;i < nodes.size();++ i){
-						NodePosition& node = positions[nodes[i]];
-						if(node.l != 0){
-							edges.push_back(i);
-							edges.push_back(nodes.size());
-							nodes.push_back(node.l);
-							points.push_back(positions[node.l].pos());
-							points.push_back(points[2 * i + 1] + hInterval);
-						}
-						if(node.r != 0){
-							edges.push_back(i);
-							edges.push_back(nodes.size());
-							nodes.push_back(node.r);
-							points.push_back(positions[node.r].pos());
-							points.push_back(points[2 * i + 1] + hInterval);
-						}
+				for(size_t i = 0;i < nodes.size();++ i){
+					NodePosition& node = positions[nodes[i]];
+					if(node.l != 0){
+						edges.push_back(i);
+						edges.push_back(nodes.size());
+						nodes.push_back(node.l);
+						points.push_back(positions[node.l].pos());
+						points.push_back(points[2 * i + 1] + hInterval);
+					}
+					if(node.r != 0){
+						edges.push_back(i);
+						edges.push_back(nodes.size());
+						nodes.push_back(node.r);
+						points.push_back(positions[node.r].pos());
+						points.push_back(points[2 * i + 1] + hInterval);
 					}
 				}
+			}
 			template<class T, class F>
 			void calculate(T t, F f, unsigned int nIndex, double lB, double interval, 
 				std::vector<NodePosition>& positions){
