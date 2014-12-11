@@ -95,12 +95,13 @@ public:
 		return &p->second;
 	}
 
-	void remove(const K& k) override {
+	bool remove(const K& k) override {
 		for(auto s = table.begin(), e = table.end();s != e;++ s)
 			if(s->first == k){
 				table.erase(s);
-				return;
+				return true;
 			}
+		return false;
 	}
 
 	bool isEmpty() const override {

@@ -52,6 +52,9 @@ public:
 	};
 	class Iterator{
 	public:
+		Iterator(){
+		}
+
 		Iterator(const Iterator& i) : impl(i.impl->copy()){
 		}
 		
@@ -70,15 +73,15 @@ public:
 			return tmp;
 		}	
 
-		bool operator==(const Iterator& i){
+		bool operator==(const Iterator& i) const{
 			return impl->equals(*i.impl);
 		}
 		
-		bool operator!=(const Iterator& i){
+		bool operator!=(const Iterator& i) const{
 			return !impl->equals(*i.impl);
 		}
 
-		kv operator*(){
+		kv operator*() const{
 			return kv(impl);
 		}
 
@@ -89,11 +92,19 @@ public:
 			return *this;
 		}
 
-		const K& key(){
+		
+		Iterator& operator=(Iterator&& i){
+			if(&i != this){
+				std::swap(impl, i.impl);
+			}
+			return *this;
+		}
+
+		const K& key() const{
 			return impl->key();
 		}
 
-		const V& value(){
+		const V& value() const{
 			return impl->value();
 		}
 
@@ -105,7 +116,7 @@ public:
 		friend class SymbolTable;
 		Iterator(IteratorImpl *impl) : impl(impl){
 		}
-		IteratorImpl *impl;
+		IteratorImpl *impl = nullptr;
 	};
 	/**
 	 * Put a key-value pair into the symbol table.
@@ -127,8 +138,10 @@ public:
 	 * Delete a key and its associated value from the symbol table, if the key
 	 * 	is contained in the symbol table.
 	 * @param k The key to be deleted. 
+	 * @return {@code true}, if {@var k} is removed from the symbol table,
+	 * 	else false.
 	 */
-	virtual void remove(const K& k) = 0;
+	virtual bool remove(const K& k) = 0;
 	/**
 	 * Test whether a key is contained in the symbol table.
 	 * @param k The key to be tested.

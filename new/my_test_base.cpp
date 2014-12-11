@@ -16,9 +16,8 @@ namespace{
 using namespace my_lib;
 TwoDPlot *instance = nullptr;
 double pointSize = 4.0;
-double charSize = 0.0003;
+thread_local double charSize = 0.0003;
 void openGLInit() {
-	glEnableClientState(GL_COLOR_ARRAY);
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glClearColor(0.000, 0.110, 0.392, 0.0); 
 	glColor3f(0.314, 0.314, 0.000); 
@@ -36,8 +35,16 @@ void drawArrays(double *points, double *colors,
 	//glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &savedBinding);
 	//glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glVertexPointer(2, GL_DOUBLE, 0, points);
-	if(colors != nullptr)
+	//For some opengl versions when GL_COLOR_ARRAY is enabled
+	//glColorPointer must be used to set color pointer.
+	//If we don't have color pointer, we must disable it.
+	glColorPointer(3, GL_DOUBLE, 0, colors);
+	if(colors != nullptr){
+		glEnableClientState(GL_COLOR_ARRAY);
 		glColorPointer(3, GL_DOUBLE, 0, colors);
+	}else{
+		glDisableClientState(GL_COLOR_ARRAY);
+	}
 	if(indices == nullptr)
 		glDrawArrays(mode, 0, n);
 	else
@@ -104,9 +111,9 @@ int TwoDPlot::run(int argc, char *argv[]){
 	glutInitWindowSize(640, 480);
 	glutInitWindowPosition(0, 0);
 	glutCreateWindow("my test");
+	openGLInit();
 	glutDisplayFunc(display);
 	glutIdleFunc(idleFunc);
-	openGLInit();
 	instance = this;	
 	glutKeyboardFunc(kbd);
 	init();
@@ -178,12 +185,9 @@ void StatPlotBase::collecting(StatPlotBase *plot){
 		std::this_thread::sleep_for(dura);
 	}
 }
-void StatPlotBase::show(){
-	glClear(GL_COLOR_BUFFER_BIT);
-	std::lock_guard<std::mutex> lg(m);
-	double xMin = DBL_MAX, xMax = -DBL_MAX, yMin = DBL_MAX, yMax = -DBL_MAX; 
+bool StatPlotBase::getBounds(double& xMin, double& xMax, double& yMin, double& yMax) const{
 	for(size_t i = 0;i < graphs.size();++ i){
-		std::vector<double>& points = graphs[i];
+		const std::vector<double>& points = graphs[i];
 		for(size_t j = 0;j < points.size();j += 2){
 			xMin = std::min(xMin, points[j]);
 			xMax = std::max(xMax, points[j]);
@@ -204,13 +208,26 @@ void StatPlotBase::show(){
 		yMax += eps;
 		yMin -= eps;
 	}
+	return true;
+}
+bool StatPlotBase::getTitle(RenderInfo& renderInfo) const{
+	std::ostringstream os;
+	os << "min : " << renderInfo.yMin << ", max : " << renderInfo.yMax;
+	renderInfo.title = os.str();
+	return true;
+}
+void StatPlotBase::show(){
+	glClear(GL_COLOR_BUFFER_BIT);
+	std::lock_guard<std::mutex> lg(m);
+	RenderInfo renderInfo;
+	getBounds(renderInfo);
 	
-	double deltaX = xMax - xMin;
-	double deltaY = yMax - yMin;
+	double deltaX = renderInfo.xMax - renderInfo.xMin;
+	double deltaY = renderInfo.yMax - renderInfo.yMin;
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluOrtho2D(xMin - 0.01 * deltaX, xMax + 0.01 * deltaX, 
-		yMin - 0.01 * deltaY, yMax + 0.01 * deltaY);
+	gluOrtho2D(renderInfo.xMin - 0.01 * deltaX, renderInfo.xMax + 0.01 * deltaX, 
+		renderInfo.yMin - 0.01 * deltaY, renderInfo.yMax + 0.01 * deltaY);
 	for(size_t i = 0;i < graphs.size();++ i){
 		std::vector<double>& points = graphs[i];
 		if(!points.empty()){
@@ -220,10 +237,12 @@ void StatPlotBase::show(){
 			drawPoints(&points[0], points.size() / 2, color);
 		}
 	}
-	drawAxis(xMin, xMax, yMin, yMax);
-	std::ostringstream os;
-	os << "min : " << yMin << ", max : " << yMax;
-	drawStringImpl(0.02, 0.02, os.str().c_str());
+	if(renderInfo.drawAxis)
+		drawAxis(renderInfo.xMin, renderInfo.xMax, renderInfo.yMin, renderInfo.yMax);
+	if(getTitle(renderInfo) && !renderInfo.title.empty()){
+		::charSize = renderInfo.charSize;
+		drawStringImpl(renderInfo.titleX, renderInfo.titleY, renderInfo.title.c_str());
+	}
 	glFlush();
 }
 StatPlotBase::~StatPlotBase(){

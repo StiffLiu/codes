@@ -9,6 +9,7 @@
 #include <cassert>
 #include <ctime>
 #include <limits>
+#include <map>
 
 #define MY_MEM_TEST
 #ifdef MY_MEM_TEST 
@@ -85,6 +86,8 @@ struct MemAllocator{
 	}
 	
 	static void deallocate(void *p){
+		if(p == nullptr)
+			return;
 		MemAllocator& m = get();
 		assert(m.allocated.find(p) != m.allocated.end());
 		m.allocated.erase(p);
@@ -105,6 +108,7 @@ void operator delete(void *p){
 #include "my_bin_search_symbol_table.h"
 #include "my_rand_string_generator.h"
 #include "my_binary_search_tree.h"
+#include "my_hash_table.h"
 
 using namespace std;
 using namespace my_lib;
@@ -130,14 +134,59 @@ int validateSymbolTable(SymbolTable<KeyType, ValueType>& st){
 	assert(!st.isEmpty());
 	assert(st.contains(8));
 	assert(!st.contains(5));
-	st.remove(3);
+	assert(st.remove(3));
 	assert(!st.contains(3));
 	assert(st.size() == 3);
-	st.remove(4);
-	st.remove(8);
-	st.remove(9);
+	assert(st.remove(4));
+	assert(st.remove(8));
+	assert(st.remove(9));
 	assert(st.isEmpty());
 	assert(st.size() == 0);		
+
+	typedef std::map<KeyType, ValueType> StdMap;
+	StdMap stdMap;
+	std::vector<KeyType> keys;
+	std::vector<ValueType> values;
+	auto count = 1000;
+
+	keys.resize(count);
+	values.resize(count);
+	for(auto i = 0;i < count;++ i){
+		keys[i] = rand() % (count + count / 3);
+		values[i] = rand() % (count + count / 3);
+		stdMap[keys[i]] = values[i];
+		st.put(keys[i], values[i]);
+		assert(st.size() == stdMap.size());
+	}
+	assert(st.size() == stdMap.size());
+	for(int i = 0;i < count;++ i){
+		assert(*st.get(keys[i]) == stdMap[keys[i]]);
+	}
+	assert(st.get(count * 2) == nullptr);
+	for(int i = 0;i < count / 10;++ i){
+		assert((stdMap.find(keys[i]) != stdMap.end()) == st.remove(keys[i]));
+		stdMap.erase(keys[i]);
+		assert(st.size() == stdMap.size());
+	}
+	assert(st.size() == stdMap.size());
+	for(int i = 0;i < count / 10;++ i){
+		assert(st.get(keys[i]) == nullptr);
+		assert(!st.remove(keys[i]));
+		assert(st.size() == stdMap.size());
+	}
+	for(int i = 0;i < count;++ i){
+		if(stdMap.find(keys[i]) != stdMap.end()){
+			assert(*st.get(keys[i]) == stdMap[keys[i]]);
+		}else{
+			assert(st.get(keys[i]) == nullptr);
+			assert(!st.remove(keys[i]));
+			assert(st.size() == stdMap.size());
+		}
+	}
+
+	st.clear();
+	assert(st.size() == 0);	
+	assert(st.isEmpty());
 	return 0;
 }
 
@@ -164,9 +213,9 @@ int validateOrderedSymbolTable(OrderedSymbolTable<KeyType, ValueType>& st){
 	for(unsigned int  i = 0;i < size;++ i){
 		assert(st.rank(*st.select(i)) == i);
 	}
-	st.removeMin();
+	assert(st.removeMin());
 	assert(*st.min() == 4);
-	st.removeMax();
+	assert(st.removeMax());
 	assert(*st.max() == 8);
 	assert(st.size() == 2);
 	st.put(3, 6);
@@ -189,7 +238,9 @@ void testRotate(T& t){
 		assert(t.isValid());
 	}
 }
-void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
+
+template<class T>
+void moreOrderedTest(T& ost){
 	const unsigned int count = 100;
 	double nums[count];
 	unsigned int indices[count];
@@ -205,6 +256,10 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 	for(unsigned int i = 0;i < count;++ i){
 		ost.put(nums[indices[i]], nums[indices[i]]);
 		assert(ost.isValid());
+	}
+	{
+		T tmp(ost);
+		assert(tmp.isValid());
 	}
 
 	for(unsigned int i = 0;i < count;++ i){
@@ -250,6 +305,11 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 		}
 	}
 
+	{
+		T tmp(ost);
+		assert(tmp.isValid());
+	}
+
 	cout << "test : min, removeMin" << endl;
 	const int toRemove = 5;
 	for(unsigned int i = 0;i < toRemove;++ i){
@@ -257,6 +317,11 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 		ost.removeMin();
 		assert(ost.isValid());
 		assert(!ost.contains(nums[i]));
+	}
+
+	{
+		T tmp(ost);
+		assert(tmp.isValid());
 	}
 	
 
@@ -298,6 +363,10 @@ void moreOrderedTest(OrderedSymbolTable<KeyType, ValueType>& ost){
 		assert(i.value() == i.key());
 		ost.put(i.key(), 2 * i.key());
 		assert(*ost.get(i.key()) == i.key() * 2);
+	}
+	{
+		T tmp(ost);
+		assert(tmp.isValid());
 	}
 }
 int validateIterator(const SymbolTable<KeyType, ValueType>& st){
@@ -388,14 +457,46 @@ int testBST(BST& bst, const char *name){
 	return 0;
 }
 
+struct AnotherHashFunction{
+	unsigned int operator()(double key) const{
+		return (unsigned int)(key * 31 + 2047);
+	}
+};
+
 int testSymbolTables(int argc, char *argv[]){
 	ListSymbolTable<KeyType, ValueType> listST;
 	cout << "-----------symbol table with sequential search implementation---------------" << endl;
+	validateIterator(listST);
 	fillSymbolTable(listST);
 	validateIterator(listST);
 	validateSymbolTable(listST);
-	cout << "------------symbol table with binary search implementation----------------" << endl;
+	SeparateChainingHashTable<KeyType, ValueType> scHashTable;
+	cout << "-----------symbol table with separate chaining hash table implementation---------------" << endl;
+	validateIterator(scHashTable);
+	fillSymbolTable(scHashTable);
+	validateIterator(scHashTable);
+	validateSymbolTable(scHashTable);
+	DoubleHashSeparateChaining<KeyType, ValueType, AnotherHashFunction> dhHashTable;
+	cout << "-----------symbol table with double hash separate chaining hash table implementation---------------" << endl;
+	validateIterator(dhHashTable);
+	fillSymbolTable(dhHashTable);
+	validateIterator(dhHashTable);
+	validateSymbolTable(dhHashTable);
+	LinearProbingHashTable<KeyType, ValueType> lpHashTable;
+	cout << "-----------symbol table with linear probing hash table implementation---------------" << endl;
+	validateIterator(lpHashTable);
+	fillSymbolTable(lpHashTable);
+	validateIterator(lpHashTable);
+	validateSymbolTable(lpHashTable);
+	LazyDeleteLinearProbingHashTable<KeyType, ValueType> ldlpHashTable;
+	cout << "-----------symbol table with lazy delete linear probing hash table implementation---------------" << endl;
+	validateIterator(ldlpHashTable);
+	fillSymbolTable(ldlpHashTable);
+	validateIterator(ldlpHashTable);
+	validateSymbolTable(ldlpHashTable);
 	BinSearchSymbolTable<KeyType, ValueType> binST;
+	cout << "------------symbol table with binary search implementation----------------" << endl;
+	validateIterator(binST);
 	fillSymbolTable(binST);
 	validateIterator(binST);
 	validateOrderedSymbolTable(binST);
@@ -404,11 +505,17 @@ int testSymbolTables(int argc, char *argv[]){
 
 	TestBST bst;
 	testBST(bst, "binary search tree");
+	validateIterator(bst);
 	testRotate(bst);
+	validateIterator(bst);
 	RBTree<KeyType, ValueType> rbTree;
+	validateIterator(rbTree);
 	testBST(rbTree, "red black tree");
+	validateIterator(rbTree);
 	AVLTree<KeyType, ValueType> avlTree;
+	validateIterator(avlTree);
 	testBST(avlTree, "AVL tree");
+	validateIterator(avlTree);
 	BTreeBase<KeyType, ValueType> bTree;
 	//doublingTestOfSymbolTable();
 	cout << "--------------end of all tests---------------" << endl;
@@ -432,7 +539,12 @@ void josephusPermutation(unsigned int n, unsigned int m){
 
 }
 int testSymbolTable(int argc, char *argv[]){
+	srand(time(0));
 	josephusPermutation(10, 8);
-	return testSymbolTables(argc, argv);
+	for(int i = 0;i < 1000; ++ i){
+		std::cout << "---------------------patch " << i << "-------------------------" << std::endl;
+		testSymbolTables(argc, argv);
+	}
+	return 0;
 }
 

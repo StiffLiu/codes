@@ -1,5 +1,6 @@
 #ifndef MY_LIB_MY_ACCESS_COUNTED_OBJECT_H
 #define MY_LIB_MY_ACCESS_COUNTED_OBJECT_H
+#include <cassert>
 namespace my_lib{
 
 /**
@@ -15,10 +16,41 @@ protected:
 public:
 	AccessCountedObject(const Counter counter = Counter()) : counter(counter){
 	}
-	const Counter& getCounter()const{
+	const Counter& getCounter() const{
 		return counter;
 	}
+	void setCounter(const Counter& c) const{
+		this->counter = c;
+	}
 };
+
+template<class T>
+class Incrementor{
+	T *ptr;
+public:
+	Incrementor(T *ptr = nullptr) : ptr(ptr){
+	}
+	operator const T&() const{
+		assert(ptr != nullptr);
+		return *ptr;
+	}
+	operator T&(){
+		assert(ptr != nullptr);
+		return *ptr;
+	}
+	Incrementor& operator++(){
+		assert(ptr != nullptr);
+		++ *ptr;
+		return *this;
+	}
+	Incrementor& operator++(int){
+		assert(ptr != nullptr);
+		++ *ptr;
+		return *this;
+	}
+};
+
+
 template<class Counter, class T>
 class AccessCountedArray : public AccessCountedObject<Counter>{
 	typedef AccessCountedObject<Counter> Super;

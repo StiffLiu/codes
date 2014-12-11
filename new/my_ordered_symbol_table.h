@@ -11,7 +11,7 @@ class OrderedSymbolTable : public SymbolTable<K, V>{
 	typedef SymbolTable<K, V> Super;
 public:
 
-	void remove(const K& k) override = 0;
+	bool remove(const K& k) override = 0;
 
 	/**
 	 * @return Pointer to the minimum key, {@code nullptr} doesn't exist.
@@ -44,20 +44,24 @@ public:
 
 	/**
 	 * Remove the minimum key.
+	 * @return true if the min element is removed
 	 */
-	virtual void removeMin(){
+	virtual bool removeMin(){
 		const K* k = min();
 		if(k != nullptr)
-			remove(*k);
+			return remove(*k);
+		return false;
 	}
 
 	/**
 	 * Remove the maximum key.
+	 * @return true if the max element is removed
 	 */
-	virtual void removeMax(){
+	virtual bool removeMax(){
 		const K* k = max();
 		if(k != nullptr)
-			remove(*k);
+			return remove(*k);
+		return false;
 	}
 
 	unsigned int size() const override = 0;

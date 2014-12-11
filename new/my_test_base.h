@@ -4,7 +4,9 @@
 #include <thread>
 #include <mutex>
 #include <utility>
+#include <string>
 #include <iostream>
+#include <cfloat>
 
 namespace my_lib{
 	class TwoDPlot{
@@ -30,7 +32,7 @@ namespace my_lib{
 	};
 	class StatPlotBase : public TwoDPlot{
 		typedef TwoDPlot Super;
-		public:
+	public:
 		StatPlotBase(unsigned int numGraphs, double *colors = nullptr)
 			: graphs(numGraphs), colors(colors, 
 					(colors == nullptr ? colors : colors + 3 * numGraphs)){
@@ -40,7 +42,14 @@ namespace my_lib{
 		}
 		void show() override;
 		~StatPlotBase() ;
-		protected:
+	protected:
+		struct RenderInfo{
+			double xMin = DBL_MAX, xMax = -DBL_MAX, yMin = DBL_MAX, yMax = -DBL_MAX; 
+			double titleX = 0.02, titleY = 0.02;
+			double charSize = 0.0003;
+			bool drawAxis = true;
+			std::string title;
+		};
 		std::vector<std::vector<double> > graphs;
 		std::vector<double> colors;
 		std::thread collectingThread;
@@ -51,11 +60,16 @@ namespace my_lib{
 		virtual bool collect(double *values){
 			return false;
 		}
+		virtual bool getBounds(double& xMin, double& xMax, double& yMin, double& yMax) const;
+		bool getBounds(RenderInfo& renderInfo) const{
+			return getBounds(renderInfo.xMin, renderInfo.xMax, renderInfo.yMin, renderInfo.yMax);
+		}
+		virtual bool getTitle(RenderInfo& renderInfo) const;
 	};
 	template<class Collector>
 		class StatPlot : public StatPlotBase{
 			Collector collector;
-			protected:
+		protected:
 			StatPlot(unsigned int numGraphs, const Collector& collector, 
 					double *colors = nullptr) : StatPlotBase(numGraphs, colors), collector(collector){
 			}

@@ -99,12 +99,14 @@ public:
 		return nullptr;
 	}
 	
-	void remove(const K& k) override {
+	bool remove(const K& k) override {
 		auto pos = std::lower_bound(table.begin(), table.end(), k, compareKey);
 		if(pos != table.end() && !compareKey.comparator(k, pos->first) &&
 			!compareKey.comparator(k, pos->first)){
 			table.erase(pos);
+			return true;
 		}
+		return false;
 	}	
 
 	bool isEmpty() const override {
@@ -156,12 +158,18 @@ public:
 		return &table[index].first;
 	}
 
-	void removeMin() override {
+	bool removeMin() override {
+		if(table.empty())
+			return false;
 		table.erase(table.begin());
+		return true;
 	}
 
-	void removeMax() override {
+	bool removeMax() override {
+		if(table.empty())
+			return false;
 		table.erase(-- table.end());
+		return true;
 	}
 
 	unsigned int size(const K& l, const K& h) const override {

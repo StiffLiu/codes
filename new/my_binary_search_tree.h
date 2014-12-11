@@ -17,16 +17,32 @@ public:
 	typedef typename BSTNodeTraits::NodePtr NodePtr;
 	BinarySearchTreeBase(C comparator = C()) : comparator(comparator){
 	}
-	BinarySearchTreeBase(const BinarySearchTreeBase&) = delete;
-	BinarySearchTreeBase& operator=(const BinarySearchTreeBase&) = delete;
+	BinarySearchTreeBase(BinarySearchTreeBase&& bst){
+		root = bst.root;
+		comparator = bst.comparator;
+		bst.root = NodePtr();
+	}
+	BinarySearchTreeBase(const BinarySearchTreeBase& bst){
+		root = (bst.root == NodePtr() ? NodePtr() : BSTNodeTraits::copyNode(bst.root));
+		comparator = bst.comparator;
+	}
+	BinarySearchTreeBase& operator=(const BinarySearchTreeBase& bst){
+		if(this == &bst)
+			return *this;
+		clear();
+		root = (bst.root == NodePtr() ? NodePtr() : BSTNodeTraits::copyNode(bst.root));
+		comparator = bst.comparator;
+		return *this;
+	}
 
 	void put(const K& k, const V& v) override {
 		putInner(k, v);
 	}
 
-	void remove(const K&k) override {
+	bool remove(const K&k) override {
 		NodePtr node = removeInner(k);
 		BSTNodeTraits::deleteNode(node);
+		return node != NodePtr();
 	}
 
 	const V* get(const K& k) const override{
@@ -145,12 +161,16 @@ public:
 		}
 		return BSTNodeTraits::rightRotate(node);
 	}
-	void removeMin() override {
-		BSTNodeTraits::deleteNode(removeMinInner());
+	bool removeMin() override {
+		NodePtr node = removeMinInner();
+		BSTNodeTraits::deleteNode(node);
+		return node != NodePtr();
 	}
 
-	void removeMax() override {
-		BSTNodeTraits::deleteNode(removeMaxInner());
+	bool removeMax() override {
+		NodePtr node = removeMaxInner();
+		BSTNodeTraits::deleteNode(node);
+		return node != NodePtr();
 	}
 
 	bool isEmpty() const override{
@@ -220,6 +240,7 @@ public:
 	 * @return true if the data structure is valid.
 	 */
 	bool isValid() const override {
+		assert(root == NodePtr() || BSTNodeTraits::parent(root) == NodePtr());
 		return root == NodePtr() || 
 			(BSTNodeTraits::parent(root) == NodePtr() && BSTNodeTraits::isValid(root));
 	}
@@ -362,8 +383,8 @@ protected:
 				if(BSTNodeTraits::right(leftMost) != NodePtr())
 					BSTNodeTraits::parent(BSTNodeTraits::right(leftMost), BSTNodeTraits::parent(leftMost));
 			}else{
-				BSTNodeTraits::parent(root, NodePtr());
 				root = BSTNodeTraits::right(root);
+				BSTNodeTraits::parent(root, NodePtr());
 			}
 			return leftMost;
 		}
@@ -378,12 +399,12 @@ protected:
 				rightMost = BSTNodeTraits::right(rightMost);
 			}
 			if(rightMost != root){
-			BSTNodeTraits::right(BSTNodeTraits::parent(rightMost), BSTNodeTraits::left(rightMost));
+				BSTNodeTraits::right(BSTNodeTraits::parent(rightMost), BSTNodeTraits::left(rightMost));
 				if(BSTNodeTraits::left(rightMost) != NodePtr())
 					BSTNodeTraits::parent(BSTNodeTraits::left(rightMost), BSTNodeTraits::parent(rightMost));
 			}else{
+				root = BSTNodeTraits::left(root);
 				BSTNodeTraits::parent(root, NodePtr());
-				root = BSTNodeTraits::right(root);
 			}
 			return rightMost;
 		}
@@ -422,6 +443,14 @@ protected:
 			return false;
 		}
 
+		bool operator==(const BinarySearchTreeIterator& itor){
+			return node == itor.node;
+		}
+
+		bool operator!=(const BinarySearchTreeIterator& itor){
+			return node != itor.node;
+		}
+
 		void assign(const IteratorImpl& i) override{
 			const BinarySearchTreeIterator *itor = dynamic_cast<const BinarySearchTreeIterator*>(&i);
 			if(itor != nullptr)
@@ -448,7 +477,7 @@ protected:
 	};
 
 	BinarySearchTreeIterator *implBegin() const override{
-		return new BinarySearchTreeIterator(BSTNodeTraits::lmc(root));
+		return new BinarySearchTreeIterator(root == NodePtr() ? NodePtr() : BSTNodeTraits::lmc(root));
 	}
 
 	BinarySearchTreeIterator *implEnd() const override{
@@ -585,6 +614,23 @@ struct NodeTraits{
 		NodeBase::swap(node1, node2);
 	}
 
+	static NodePtr copyNode(NodePtr node){
+		auto parent = new Node(*node);
+		auto left = NodeBase::left(parent);
+		if(left != NodePtr()){
+			left = copyNode(left);
+			NodeBase::parent(left, parent);
+			NodeBase::left(parent, left);
+		}
+		auto right = NodeBase::right(parent);
+		if(right != NodePtr()){
+			right = copyNode(right);
+			NodeBase::parent(right, parent);
+			NodeBase::right(parent, right);
+		}
+		return parent;
+	}
+
 	/**
 	 * @return {@code true} if the data structure is valid.
 	 */
@@ -605,6 +651,7 @@ struct NodeTraits{
 				assert(false);//return false;
 			tmp += count(right(node));
 		}
+		assert(tmp + 1 == count(node));
 		return tmp + 1 == count(node);
 	}
 
@@ -665,6 +712,7 @@ private:
 public:
 	typedef typename NodeTraits<BSTNode, NodeBase>::Node Node;
 	typedef typename NodeTraits<BSTNode, NodeBase>::NodePtr NodePtr;
+
 	static NodePtr createNode(const K& k, const V& v){
 		return new Node(k, v);		
 	}
@@ -758,6 +806,9 @@ struct BSTNode{
 };
 template<class K, class V, class C = std::less<K> > 
 class BinarySearchTree : public BinarySearchTreeBase<K, V, BSTNodeTraits<K, V, BSTNode<K, V>, BSTNodeBase<BSTNode<K, V> > >, C>{
+	typedef BinarySearchTreeBase<K, V, BSTNodeTraits<K, V, BSTNode<K, V>, BSTNodeBase<BSTNode<K, V> > >, C> Super;
+public:
+	BinarySearchTree(C comparator = C()) : Super(comparator){}
 };
 
 template<class RBNode>
@@ -826,37 +877,45 @@ class RBTreeBase : public BinarySearchTreeBase<K, V, RBNodeTraitsParam, C>{
 public:
 	typedef typename Super::BSTNodeTraits RBNodeTraits;
 	typedef typename Super::NodePtr NodePtr;
+	RBTreeBase(const C& comparator = C()) : Super(comparator){
+	}
 	void put(const K& k, const V& v) override {
 		NodePtr node = Super::putInner(k, v);
 		if(node != NodePtr())
 			fixInsert(node);
 	}
 
-	void remove(const K&k) override {
+	bool remove(const K&k) override {
 		NodePtr node = Super::removeInner(k);
 		if(node != NodePtr()){
 			assert(RBNodeTraits::left(node) == NodePtr() || RBNodeTraits::right(node) == NodePtr()); 
 			fixRemove(node);
 			RBNodeTraits::deleteNode(node);
+			return true;
 		}
+		return false;
 	}
 
-	void removeMin() override {
+	bool removeMin() override {
 		NodePtr node = Super::removeMinInner();
 		if(node != NodePtr()){
 			assert(RBNodeTraits::left(node) == NodePtr() || RBNodeTraits::right(node) == NodePtr()); 
 			fixRemove(node);
 			RBNodeTraits::deleteNode(node);
+			return true;
 		}
+		return false;
 	}
 
-	void removeMax() override {
+	bool removeMax() override {
 		NodePtr node = Super::removeMaxInner();
 		if(node != NodePtr()){
 			assert(RBNodeTraits::left(node) == NodePtr() || RBNodeTraits::right(node) == NodePtr()); 
 			fixRemove(node);
 			RBNodeTraits::deleteNode(node);
+			return true;
 		}
+		return false;
 	}
 
 	bool isValid() const override {
@@ -1032,6 +1091,10 @@ protected:
 
 template<class K, class V, class C = std::less<K> > 
 class RBTree: public RBTreeBase<K, V, RBNodeTraits<K, V, RBNode<K, V>, RBNodeBase<RBNode<K, V> > >, C>{
+	typedef RBTreeBase<K, V, RBNodeTraits<K, V, RBNode<K, V>, RBNodeBase<RBNode<K, V> > >, C> Super;
+public:
+	RBTree(const C& comparator = C()) : Super(comparator){
+	}
 };
 
 template<class AVLNode>
@@ -1092,37 +1155,45 @@ class AVLTreeBase : public BinarySearchTreeBase<K, V, AVLNodeTraitsParam, C>{
 public:
 	typedef typename Super::BSTNodeTraits AVLNodeTraits;
 	typedef typename Super::NodePtr NodePtr;
+	AVLTreeBase(const C& comparator = C()) : Super(comparator){
+	}
 	void put(const K& k, const V& v) override {
 		NodePtr node = Super::putInner(k, v);
 		if(node != NodePtr())
 			fixInsert(node);
 	}
 
-	void remove(const K&k) override {
+	bool remove(const K&k) override {
 		NodePtr node = Super::removeInner(k);
 		if(node != NodePtr()){
 			assert(AVLNodeTraits::left(node) == NodePtr() || AVLNodeTraits::right(node) == NodePtr()); 
 			fixRemove(node);
 			AVLNodeTraits::deleteNode(node);
+			return true;
 		}
+		return false;
 	}
 
-	void removeMin() override {
+	bool removeMin() override {
 		NodePtr node = Super::removeMinInner();
 		if(node != NodePtr()){
 			assert(AVLNodeTraits::left(node) == NodePtr() || AVLNodeTraits::right(node) == NodePtr()); 
 			fixRemove(node);
 			AVLNodeTraits::deleteNode(node);
+			return true;
 		}
+		return false;
 	}
 
-	void removeMax() override {
+	bool removeMax() override {
 		NodePtr node = Super::removeMaxInner();
 		if(node != NodePtr()){
 			assert(AVLNodeTraits::left(node) == NodePtr() || AVLNodeTraits::right(node) == NodePtr()); 
 			fixRemove(node);
 			AVLNodeTraits::deleteNode(node);
+			return true;
 		}
+		return false;
 	}
 
 	int height() const override {
@@ -1381,6 +1452,10 @@ protected:
 
 template<class K, class V, class C = std::less<K> > 
 class AVLTree: public AVLTreeBase<K, V, AVLNodeTraits<K, V, AVLNode<K, V>, AVLNodeBase<AVLNode<K, V> > >, C>{
+	typedef AVLTreeBase<K, V, AVLNodeTraits<K, V, AVLNode<K, V>, AVLNodeBase<AVLNode<K, V> > >, C> Super;
+public:
+	AVLTree(const C& comparator = C()) : Super(comparator){
+	}
 };
 
 template<class K, class V, unsigned int NUM>
@@ -1532,7 +1607,8 @@ public:
 		return nullptr;
 	}
 
-	void remove(const K& k) override {
+	bool remove(const K& k) override {
+		return false;
 	}
 
 	unsigned int size() const override {
@@ -1614,16 +1690,18 @@ public:
 		return nullptr;
 	}	
 
-	void removeMin() override {
+	bool removeMin() override {
 		const K* k = min();
 		if(k != nullptr)
-			remove(*k);
+			return remove(*k);
+		return false;
 	}
 
-	void removeMax() override {
+	bool removeMax() override {
 		const K* k = max();
 		if(k != nullptr)
-			remove(*k);
+			return remove(*k);
+		return false;
 	}
 
 	unsigned int size(const K& l, const K& h) const override {
