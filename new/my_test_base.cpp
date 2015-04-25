@@ -1,6 +1,5 @@
 #include "my_test_base.h"
 #include <algorithm>
-#include <GL/glew.h>
 #include <GL/gl.h>
 #include <GL/glut.h>
 #include <GL/glext.h>

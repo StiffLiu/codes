@@ -1,3 +1,5 @@
+#ifndef MY_LIB_HASH_TABLE_H
+#define MY_LIB_HASH_TABLE_H
 #include "my_symbol_table.h"
 #include "my_list_symbol_table.h"
 #include <vector>
@@ -632,3 +634,4 @@ public:
 	}
 };
 }
+#endif //MY_LIB_HASH_TABLE_H

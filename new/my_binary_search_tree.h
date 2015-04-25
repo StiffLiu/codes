@@ -804,12 +804,8 @@ struct BSTNode{
 		:p(p), l(l), r(r), c(count), value(Pair(k, v)){
 	}
 };
-template<class K, class V, class C = std::less<K> > 
-class BinarySearchTree : public BinarySearchTreeBase<K, V, BSTNodeTraits<K, V, BSTNode<K, V>, BSTNodeBase<BSTNode<K, V> > >, C>{
-	typedef BinarySearchTreeBase<K, V, BSTNodeTraits<K, V, BSTNode<K, V>, BSTNodeBase<BSTNode<K, V> > >, C> Super;
-public:
-	BinarySearchTree(C comparator = C()) : Super(comparator){}
-};
+template<class K, class V, class C = std::less<K> >
+using BinarySearchTree = BinarySearchTreeBase < K, V, BSTNodeTraits<K, V, BSTNode<K, V>, BSTNodeBase<BSTNode<K, V> > >, C > ;
 
 template<class RBNode>
 struct RBNodeBase : public BSTNodeBase<RBNode>{
@@ -1090,12 +1086,7 @@ protected:
 };
 
 template<class K, class V, class C = std::less<K> > 
-class RBTree: public RBTreeBase<K, V, RBNodeTraits<K, V, RBNode<K, V>, RBNodeBase<RBNode<K, V> > >, C>{
-	typedef RBTreeBase<K, V, RBNodeTraits<K, V, RBNode<K, V>, RBNodeBase<RBNode<K, V> > >, C> Super;
-public:
-	RBTree(const C& comparator = C()) : Super(comparator){
-	}
-};
+using RBTree = RBTreeBase < K, V, RBNodeTraits<K, V, RBNode<K, V>, RBNodeBase<RBNode<K, V> > >, C > ;
 
 template<class AVLNode>
 struct AVLNodeBase : public BSTNodeBase<AVLNode>{
@@ -1451,12 +1442,7 @@ protected:
 };
 
 template<class K, class V, class C = std::less<K> > 
-class AVLTree: public AVLTreeBase<K, V, AVLNodeTraits<K, V, AVLNode<K, V>, AVLNodeBase<AVLNode<K, V> > >, C>{
-	typedef AVLTreeBase<K, V, AVLNodeTraits<K, V, AVLNode<K, V>, AVLNodeBase<AVLNode<K, V> > >, C> Super;
-public:
-	AVLTree(const C& comparator = C()) : Super(comparator){
-	}
-};
+using AVLTree = AVLTreeBase < K, V, AVLNodeTraits<K, V, AVLNode<K, V>, AVLNodeBase<AVLNode<K, V> > >, C > ;
 
 template<class K, class V, unsigned int NUM>
 class BTreeNode{
@@ -1514,9 +1500,9 @@ public:
 		assert(index < N);
 		if(n >= N)
 			return false;
-		std::copy_backward((K*)keys + index, (K*)keys + n, (K*)keys + n + 1);
-		std::copy_backward((V*)values + index, (V*)values + n, (V*)values + n + 1);
-		std::copy_backward(children + index + 1, children + n + 1, children + n + 2);
+		//std::copy_backward((K*)keys + index, (K*)keys + n, (K*)keys + n + 1);
+		//std::copy_backward((V*)values + index, (V*)values + n, (V*)values + n + 1);
+		//std::copy_backward(children + index + 1, children + n + 1, children + n + 2);
 
 		children[index + 1] = nullptr;
 		((K*)keys)[index] = k;

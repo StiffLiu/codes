@@ -95,7 +95,9 @@ public:
 		
 		Iterator& operator=(Iterator&& i){
 			if(&i != this){
-				std::swap(impl, i.impl);
+				auto temp = impl;
+				impl = i.impl;
+				i.impl = temp;
 			}
 			return *this;
 		}

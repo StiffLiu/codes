@@ -109,6 +109,7 @@ void operator delete(void *p){
 #include "my_rand_string_generator.h"
 #include "my_binary_search_tree.h"
 #include "my_hash_table.h"
+#include "my_sparse_matrix.h"
 
 using namespace std;
 using namespace my_lib;
@@ -537,10 +538,142 @@ void josephusPermutation(unsigned int n, unsigned int m){
 	cout << endl;
 }
 
+/**
+ * This function locates an item(key) in a range of non-overlapping closed intervals.
+ * @param intBegin begin iterator of the range of intervals.
+ * @param intEnd end iterator of the range of intervals.
+ * @param k item(key) to locate.
+ * @return if the range of intervals contains overlap return {@code T()}
+ *         if the item locates inside some interval, the interval is returned, 
+ *         else {@code T()} is returned.
+ */
+template<class T, class U>
+T locateItemInIntervals(T intBegin, T intEnd, U k){
+	RBTree<U, T> dict;
+	while(intBegin != intEnd){
+		auto floorBegin = dict.floor(intBegin.begin());
+		auto ceilBegin = dict.ceil(intBegin.begin());
+		auto intFloorBegin = (floorBegin == nullptr ? nullptr : dict.get(*floorBegin));
+		auto intCeilBegin = (ceilBegin == nullptr ? nullptr : dict.get(*ceilBegin));
+		//if the start point of this interval is inside another interval
+		//then the range of intervals contains overlap
+		if(intFloorBegin != nullptr && intCeilBegin != nullptr
+		   && *intFloorBegin == *intCeilBegin){
+			return T();
+		}
+
+		auto floorEnd = dict.floor(intBegin.end());
+		auto ceilEnd = dict.ceil(intBegin.end());
+		auto intFloorEnd = (floorEnd == nullptr ? nullptr : dict.get(*floorEnd));
+		auto intCeilEnd = (ceilEnd == nullptr ? nullptr : dict.get(*ceilEnd));
+		//if the end point of this interval is inside another interval
+		//then the range of intervals contains overlap
+		if(intFloorEnd != nullptr && intCeilEnd != nullptr
+		   && *intFloorEnd == *intCeilEnd){
+			return T();
+		}
+		
+		//if another interval is inside this interval
+		//then the range of interals contains overlap
+		if(intCeilBegin != nullptr && intFloorEnd != nullptr
+		   && *intCeilBegin == *intFloorEnd){
+			return T();
+		}
+
+		dict.put(intBegin.begin(), intBegin);
+		dict.put(intBegin.end(), intBegin);
+
+		++ intBegin;
+	}
+
+	auto floor = dict.floor(k);
+	auto ceil = dict.ceil(k);
+	if(floor == nullptr || ceil == nullptr){
+		return T();
+	}
+
+	auto interval = dict.get(*floor);
+	return (*interval == *dict.get(*ceil) ? *interval : T());
+}
+
+template<class T>
+class Interval{
+	T *interval;
+public:
+	Interval(T *interval = nullptr) : interval(interval){
+	}
+	T& begin(){
+		return *interval;
+	}
+	T& end(){
+		return *(interval + 1);
+	}
+	const T& begin() const{
+		return *interval;
+	}
+	const T& end() const{
+		return *(interval + 1);
+	}
+	Interval& operator++(){
+		interval += 2;
+		return *this;
+	}
+	Interval operator++(int){
+		Interval old(interval);
+		interval += 2;
+		return old;
+	}
+	bool operator==(const Interval& another) const{
+		return another.interval == interval;
+	}
+	bool operator!=(const Interval& another) const{
+		return another.interval != interval;
+	}
+	friend ostream& operator<<(ostream& os, const Interval& interval){
+		return os << '[' << interval.begin() << ',' << interval.end() << ']';
+	}
+};
+
+void testLocateItemInIntervals(){
+	typedef Interval<int> IntInt;
+	int intervals[] = {1643, 2033, 5532, 7643, 8999, 10332, 5666653, 5669321};
+	auto dest = locateItemInIntervals(IntInt(intervals), IntInt(intervals + ARSIZE(intervals)), 9122);
+	if(dest != IntInt())
+		cout << dest << endl;
+	else
+		cout << "not in any interval, or the intervals contains overlap" << endl;
+}
+
+void testSparseMatrix(){
+	SparseVector<double, my_lib::SeparateChainingHashTable<unsigned int, double> > vec(20);
+	SparseVector<double, my_lib::StdSTAdapter<std::map<unsigned int, double> > > vec1(20);
+	for(auto i = 0;i < 5;++ i){
+		vec.set(rand() % 20, rand() % 2000);
+		vec1.set(rand() % 20, rand() % 2000);
+	}
+	cout << "vec : " << vec << endl << "vec1 : " << vec1 << endl;
+
+	auto tmp = vec1 + vec;
+	cout << "tmp : " << tmp << endl;
+	auto tmp1 = vec * vec1;
+	cout << "tmp1 : " << tmp1 << endl;
+	cout << "tmp ` tmp1 : " << tmp.dot(tmp1) << endl;
+
+	vec *= 0.5;
+	vec1 += 1.0;
+
+	cout << "vec * 0.5 : " << vec << endl << "vec1 + 1.0 : " << vec1 << endl;
+	vec /= vec1;
+	cout << "vec * 0.5 / (vec1 + 1.0) : " << vec << endl;
+}
+
 }
 int testSymbolTable(int argc, char *argv[]){
 	srand(time(0));
+	testLocateItemInIntervals();
+	testSparseMatrix();
 	josephusPermutation(10, 8);
+	cin.get();
 	for(int i = 0;i < 1000; ++ i){
 		std::cout << "---------------------patch " << i << "-------------------------" << std::endl;
 		testSymbolTables(argc, argv);

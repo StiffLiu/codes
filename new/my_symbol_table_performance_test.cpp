@@ -1189,7 +1189,7 @@ class LinearProbingPlot : public my_lib::StatPlot<LinearProbingPlot&> {
 	bool paused = false, nonDelete = false;
 	unsigned int count = 0, maxLen = 0, aveHit = 0, aveMiss = 0;
 public:
-	LinearProbingPlot() : Super(3, *this), hashTable(1.2){
+	LinearProbingPlot() : Super(3, *this), hashTable(0.5){
 		double c[]={
 			1.0, 0.0, 0.0,
 			0.0, 1.0, 0.0,
@@ -1595,7 +1595,7 @@ public:
 		std::unique_lock<std::mutex> lk(m);
 		clock_t start = 0;
 		vector<unsigned int> keys;
-		int patchSize = 10;
+		int patchSize = 100;
 		keys.resize(patchSize);
 		for(auto& key : keys) key = rand() % maxValue;
 		if(isRand){
@@ -1782,17 +1782,16 @@ int test(int argc, char *argv[]){
 	//LinearProbingPlot testPlot;
 	//EmptyChainNumPlot testPlot;
 	//AveTreeHeightPlot testPlot;
-	//jHashFunctionCompare testPlot;
+	//HashFunctionCompare testPlot;
 	//SeperateChainingStatistic testPlot;
-	//AccumulatedTimeComparison testPlot;
 	//double lfs[5] = {0.1, 0.5, 0.9, 2.0, 4.0};
 	//HashTableLoadFactorCompare<my_lib::SeparateChainingHashTable<unsigned int, unsigned int, EqualComparisonCounter> >  testPlot(lfs);
 	//double lfs[5] = {0.1, 0.2, 0.5, 0.7, 0.9};
 	//HashTableLoadFactorCompare<my_lib::LinearProbingHashTable<unsigned int, unsigned int, EqualComparisonCounter> >  testPlot(lfs);
-	//SymbolTableCompare testPlot;
+	SymbolTableCompare testPlot;
 	//CompareWithStdHashMap testPlot;
 	//DiffChainTypeCompare testPlot;
-	LinearProbingCompareEstimate testPlot;
+	//LinearProbingCompareEstimate testPlot;
 	testPlot.run(argc, argv);
 	return 0;
 }

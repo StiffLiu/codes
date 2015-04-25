@@ -77,11 +77,11 @@ void RandStringGenerator::randStringNoWhiteSpaces(std::string& str){
 
 void RandStringGenerator::randString(std::string& str){
 		std::random_device rd;
-		std::uniform_int_distribution<char> charGenerator(0, 127); 
+		std::uniform_int_distribution<int> charGenerator(0, 127); 
 		std::uniform_int_distribution<unsigned int> lengthGenerator(minLen, maxLen);
 		auto len = lengthGenerator(rd);
-		for(decltype(len) i = 0;i < len;++ i)
-			str.push_back(charGenerator(rd));
+		for (decltype(len) i = 0; i < len; ++i)
+			str.push_back(static_cast<char>(charGenerator(rd)));
 }
 
 }
