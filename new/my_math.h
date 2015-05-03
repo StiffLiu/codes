@@ -118,6 +118,7 @@ namespace my_lib{
 				result[i] = numbers[i];
 			}
 		}
+		delete[] numbers;
 	}
 
 	/*

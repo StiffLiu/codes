@@ -14,6 +14,7 @@
 #include <queue>
 #include <stack>
 #include <algorithm>
+#include <iostream>
 namespace my_lib{
 
 template<class K, class V>
@@ -416,7 +417,7 @@ struct DirSearchStrategyAdapter{
 	template<class Graph, class CC>
 	unsigned int operator()(unsigned int source, unsigned int root, const Graph& graph, CC& cc) const {
 		GraphAdapter<const Graph> adapter(graph);
-		strategy(source, root, adapter, cc);
+		return strategy(source, root, adapter, cc);
 	}
 };
 
@@ -842,12 +843,12 @@ template<class Graph>
  * graph: original graph.
  * vertices: a permutation of vertices of the graph.
  * */
-bool isTopologicalOrder(const Graph& reverse, const Graph& graph, const unsigned int* vertices){
+bool isTopologicalOrder(const Graph& reverse, const Graph& graph, const unsigned int* vertices, unsigned int n){
 	typedef std::unordered_map<unsigned int, unsigned int> VertexDegrees;
 	VertexDegrees vertexDegrees;
 	for (auto& v : reverse.getEdges())
 		vertexDegrees[v.first] = v.second.size();
-	for(unsigned int i = 0;i < graph.getVertexCount();++ i){
+	for(unsigned int i = 0;i < n;++ i){
 		auto pos = vertexDegrees.find(vertices[i]);
 		if(pos != vertexDegrees.end() && pos->second != 0)
 			return false;
@@ -890,7 +891,7 @@ void randomUndirGraph(unsigned int vertexCount, double ratio, Graph& graph, Gene
 		unsigned int v1 = floorTriSqrt1(e);
 		unsigned int v2 = e - v1 * (v1 - 1) / 2;
 		if(v2 == 0){
-			graph.addEdge(v1 - 2, v1 -1);
+			graph.addEdge(v1 - 1, v1 - 2);
 		}else{
 			graph.addEdge(v1, v2 -1);
 		}
@@ -922,11 +923,63 @@ void randomDirGraph(unsigned int vertexCount, double ratio, Graph& graph, Genera
 	}
 }
 
+template<class Graph, class Generator>
+void randomDAG(unsigned int vertexCount, double ratio, Graph& graph, Generator generator){
+	struct Edges{
+		std::unordered_map<unsigned int, unsigned int> vertexMap;
+		std::vector<unsigned int> vertices;
+		std::vector<std::pair<unsigned int, unsigned int> > edges;
+		void reset(unsigned int){
+		}
+		void addEdge(unsigned int v1, unsigned int v2){
+			if(v1 <= v2)
+				std::swap(v1, v2);
+
+			auto pos = vertexMap.find(v1);
+			if(pos == vertexMap.end()){
+				auto& v = vertexMap[v1];
+			        v = vertices.size();
+				vertices.push_back(v1);
+				v1 = v;
+			}else{
+				v1 = pos->second;
+			}
+			pos = vertexMap.find(v2);
+			if(pos == vertexMap.end()){
+				auto& v = vertexMap[v2];
+			        v = vertices.size();
+				vertices.push_back(v2);
+				v2 = v;
+			}else{
+				v2 = pos->second;
+			}
+			edges.push_back({v1, v2});
+		}
+	}edges;
+	randomUndirGraph(vertexCount, ratio, edges, generator);
+	for(auto i = 0;i < edges.vertices.size(); ++ i){
+		unsigned int index = i + generator() % (edges.vertices.size() - i);
+		std::swap(edges.vertices[index], edges.vertices[i]);
+	}
+	graph.reset(vertexCount);
+	for(auto& edge : edges.edges)
+		graph.addEdge(edges.vertices[edge.first], edges.vertices[edge.second]);
+}
+
 /*
- * Topological sort for directed graph.
- * Tarjan's algorithm is more efficient.
+ * Topological sort.
+ * The definition of topological order is given as follows:
+ * 1. For directed acyclic graph:
+ * 	a permutation of vertices with the property that if there's a directed path from v1 to v2
+ * 	then v2 must be after v1 in the permutation.
+ * 2. For directed graph contains cycles:
+ * 	in this case, there's no topological order actually.
+ * 	However the following property of the pertmutation of vertices calculated maybe usefull for some cases
+ * 		Let Scc1 and Scc2 be two strong connected component of the graph, 
+ * 		if there're edges from Scc1 to Scc2, then there exits a vertex in Scc1 that comes before all the vertices of Scc2 in the permutation.
  * */
 class Topological{
+protected:
 	std::vector<unsigned int> topoOrder;
 	std::vector<unsigned int> cycle;
 	struct TopoSortStrategy : public UndirDfsStrategy{
@@ -984,32 +1037,100 @@ class Topological{
 	};
 public:
 	template<class Graph>
-	Topological(Graph& graph){
+	Topological(const Graph& graph, bool reverse = true){
 		DirSearchStrategyAdapter<TopoSortStrategy> adapter;
 		unsigned int componentCount;
 		adapter(graph, adapter.strategy, componentCount);
 		topoOrder.swap(adapter.strategy.topoOrder);
-		std::reverse(topoOrder.begin(), topoOrder.end());
+		if(reverse)
+			std::reverse(topoOrder.begin(), topoOrder.end());
 		if(adapter.strategy.cycleFound)
 			cycle.swap(adapter.strategy.cycle);
 	}
 
+	/*
+	 * Returns a directed cycle in the directed graph.
+	 * nullptr if no such a cycle exists.
+	 * */
 	auto directedCycle() const ->decltype(&cycle) {
 		if(!cycle.empty())
 			return &cycle;
 		return nullptr;
 	}
 
+	/*
+	 * Returns the topological order of the directed graph.
+	 * Only meaningful for directed acyclic graph.
+	 * 
+	 * For directed graph that contains cycles, this order 
+	 * can also be used for, say calculating strong connected component.
+	 * */
 	auto order() const -> decltype(&topoOrder) {
 		return &topoOrder;
 	}
 };
 
 /*
- * Compute the strong connected component of a directed graph.
+ * Compute the strong connected component of a directed graph using Kosaraju's algorithm.
+ * Need to compute the topological order of the reverse graph.
+ * I was expecting using the reverse topological order of the original graph had the same effect
+ * as the topological of 
  * Tarjan's algorithm is more efficient.
  * */
 class StrongConnectedComponent{
+	struct SCC : public std::unordered_map<unsigned int, std::pair<unsigned int, unsigned int> >, 
+		     public Topological{
+		unsigned int componentCount = 0;
+		template<class Graph>
+		SCC(const Graph& graph) : Topological(graph.toReverse()){
+			DirDfsStrategy strategy;
+			for(auto vertex : topoOrder){
+				if((*this)(vertex)){
+					//cc(vertext, parent of vertex, root of the tree where the vertex lives in)
+					(*this)(vertex, vertex, vertex);
+					strategy(vertex, vertex, graph, *this);
+					++componentCount;
+				}
+			}
+			std::reverse(topoOrder.begin(), topoOrder.end());
+		}
+		bool operator()(unsigned int v) const {
+			return find(v) == end();
+		}
+		bool operator()(unsigned int s, unsigned int v) const {
+			return find(v) == end();
+		}
+		void operator()(unsigned int s, unsigned int p, unsigned int r){
+			auto& dat = (*this)[s];
+		        dat.first = p;
+			dat.second = r;
+		}
+	}scc;
+public:
+	template<class Graph>
+	StrongConnectedComponent(const Graph& graph) : scc(graph){
+	}
+
+	unsigned int getComponentCount(){
+		return scc.componentCount;
+	}
+
+	template<class T>
+	void getSCC(T& t){
+		for(auto& kvp : scc){
+			t[kvp.second.second].insert(kvp.first);
+		}
+	}
+	auto directedCycle() const ->decltype(scc.directedCycle()) {
+		return scc.directedCycle();
+	}
+
+	/*
+	 * Topological order for directed acyclic graph.
+	 * */
+	auto order() const -> decltype(scc.order()) {
+		return scc.order();
+	}
 };
 
 /*
@@ -1019,12 +1140,229 @@ class StrongConnectedComponent{
 /*
  * Tarjan's algorithm
  * */
+class TarjanStrategy{
+	typedef std::vector<std::pair<unsigned int, unsigned int> > Components;
+	Components components;
+public:
+	template<class Graph>
+	TarjanStrategy(const Graph& graph){
+		struct Data{
+			//<vertex, <low link, is on stack> >
+			std::unordered_map<unsigned int, std::pair<unsigned int, bool> >  links;
+			std::vector<unsigned int> stack;
+		};
+		struct Dfs{
+			const Graph& graph;
+			Data& data;
+			unsigned int& nextComponent;
+			unsigned int& index;
+			Components& components;
+			Dfs(const Graph& graph, Data& data, Components& components, unsigned int& nextComponent, unsigned int& index)
+				: graph(graph), data(data), nextComponent(nextComponent), components(components), index(index){
+			}
+			unsigned int operator()(unsigned int p, unsigned int v){
+				auto link = &data.links[v];
+				auto stackIndex = data.stack.size();
+				auto vertexIndex = index;
+				link->first = index;
+				link->second = true;
+				data.stack.push_back(v);
+				++index;
+
+				auto adj = graph.outAdj(v);
+				if(adj != nullptr)
+					for(auto a : *adj){
+						auto pos = data.links.find(a);
+						if(pos == data.links.end()){
+							unsigned int lowLink = (*this)(v, a);
+							//in case a rehash happens,
+							//the original pointer becomes invalid.
+							link = &data.links[v];
+							if(lowLink < link->first) link->first = lowLink;
+						}else if(pos->second.second && pos->second.first < link->first){
+							link->first = pos->second.first;
+						}
+					}
+
+				//in case a rehash happens, the original pointer becomes invalid.
+				link = &data.links[v];
+				if(link->first == vertexIndex){
+					auto pos = data.stack.begin() + stackIndex, end = data.stack.end();
+					for(auto begin = pos;begin != end;++begin){
+						components.push_back({*begin, nextComponent});
+						data.links[*begin].second = false;
+					}
+					data.stack.erase(pos, end);
+					++ nextComponent;
+				}
+				return link->first;
+			}
+		};
+		Data data;
+		unsigned int nextComponent = 0, index = 0;
+		for (auto& vertices : graph.getEdges()){
+			Dfs dfs(graph, data, components, nextComponent, index);
+			if(data.links.find(vertices.first) == data.links.end())
+				dfs(vertices.first, vertices.first);
+			assert(data.stack.empty());
+		}
+	}
+	template<class T>
+	void getSCC(T& t){
+		for(auto& c : components){
+			t[c.second].insert(c.first);
+		}
+	}
+};
 
 /*
-* Compute greatest commmon descandent of a two vertices in a DAG.
-*
+* Compute least commmon ancestor of two vertices in a DAG.
 * */
+class LeastCommonAncestor{
+	std::unordered_map<unsigned int, unsigned int> reachability;
+	std::unordered_set<unsigned int> lcas;
+	unsigned int v1, v2;
+	template<class Graph>
+	unsigned int visit(const Graph& graph, unsigned int s){
+		auto r = reachability[s] = (s == v1 ? 1 : (s == v2 ? 2 : 0));
 
-//Euler cycle for directed graph
+		auto adj = graph.outAdj(s);
+		auto isLeast = true;
+		if(adj != nullptr){
+			for(auto v : *adj){
+				auto pos = reachability.find(v);
+				if(pos == reachability.end()){
+					auto c = visit(graph, v);
+					isLeast = isLeast && (c != 3);
+					r |= c;
+				}else{
+					isLeast = isLeast && (pos->second != 3);
+					r |= pos->second;
+				}
+			}
+		}
+		reachability[s] = r;
+		if(r == 3 && isLeast)
+			lcas.insert(s);
+		return r;
+	}
+public:
+	template<class Graph>
+	LeastCommonAncestor(const Graph& graph, unsigned int v1, unsigned int v2) : v1(v1), v2(v2){
+		if(v1 == v2){
+			lcas.insert(v1);
+			return;
+		}
+		for(auto& vertex : graph.getEdges()){
+			if(reachability.find(vertex.first) == reachability.end()){
+				visit(graph, vertex.first);
+			}
+		}
+	}
+	const std::unordered_set<unsigned int>& lca() const {
+		return lcas;
+	}
+};
+
+/*
+ * Algorithm to calculate if a directed acyclic graph contains a Hamiltonian path
+ * return true if contains.
+ * throws std::invalid_argument if the given graph is not a directed acyclic graph.
+ * */
+template<class DAG>
+bool dagContainsHamiltonianPath(const DAG& dag){
+	Topological topological(dag);
+	if(topological.directedCycle() != nullptr)
+		throw std::invalid_argument("given graph is not a directed acyclic graph");
+	auto order = topological.order();
+	for(unsigned int i = 0;i + 1< order->size();++ i)
+		if(!dag.isAdj((*order)[i], (*order)[i + 1]))
+			return false;
+	return true;
+}
+/*
+ * return true if the given directed graph contains Euler cycle
+ */
+template<class Graph>
+bool containsEulerianCycle(const Graph& graph){
+	std::unordered_map<unsigned int, int> degDiff;
+	for(auto& vertex : graph.getEdges()){
+		degDiff[vertex.first] -= vertex.second.size();
+		for(auto& v : vertex.second){
+			++ degDiff[v];
+		}
+	}
+	for(auto& kvp : degDiff)
+		if(kvp.second != 0){
+			return false;
+		}
+	return true;
+}
+/*
+ * returns true if the strong connected components of the graph contains Euler cycle
+ * And calculates the Euler cycle of each strong connected component.
+ */
+template<class Graph, class Path>
+bool directedEulerianCycle(const Graph& graph, Path& path){
+	typedef decltype(graph.getEdges().begin()->second.begin()) AdjRange;
+	std::vector<std::pair<unsigned int, unsigned int> > paths;
+	std::unordered_map<unsigned int, std::pair<AdjRange, AdjRange> > remainingEdges;
+	std::unordered_map<unsigned int, unsigned int> vertexToLink;
+	for(auto& vertex : graph.getEdges()){
+		assert(!vertex.second.empty());
+		if(!vertex.second.empty()){
+			remainingEdges[vertex.first] = {vertex.second.begin(), vertex.second.end()};
+			vertexToLink[vertex.first] = -1;
+		}
+	}
+
+	//start link of every eurlerian cycle
+	std::vector<unsigned int> begins;
+	while(!vertexToLink.empty()){
+		auto startVertex = *vertexToLink.begin();
+		unsigned int startLink = paths.size();
+
+		auto current = remainingEdges.find(startVertex.first);
+		//loop invariant : there's unvisited edges.
+		while(current != remainingEdges.end() && current->second.first != current->second.second){
+			unsigned int curLink = paths.size();
+			if(curLink != startLink)
+				paths[curLink - 1].second = curLink;
+			paths.push_back(std::make_pair(current->first, (unsigned int)-1));
+			vertexToLink[current->first] = curLink;
+
+			auto nextVertex = *current->second.first;
+			++current->second.first;
+			if(current->second.first == current->second.second)
+				vertexToLink.erase(current->first);
+			current = remainingEdges.find(nextVertex);
+		}
+		
+		//1. if we end at a vertex with out degree zero, no Eurlerian cycle.
+		//2. we end at a vertex that's not the start vertex, no Eulerian cycle.
+		if(current == remainingEdges.end() || current->first != startVertex.first)
+			return false;
+		vertexToLink.erase(startVertex.first);
+		//Note that since we're not assming self-loops, so a cycle must contains at least 2 vertices.
+		assert(paths.size() > startLink && paths.size() - startLink > 1);
+		if(startVertex.second == -1){
+			begins.push_back(startLink);
+		}else{
+			unsigned int next = paths[startVertex.second].second;
+			paths[startVertex.second].second = paths[startLink].second;
+			paths.back().second = startLink;
+			paths[startLink].second = next;
+		}
+	}
+	for(auto begin : begins){
+		while(begin != -1){
+			path.push_back(paths[begin].first);
+			begin = paths[begin].second;
+		}
+		path.push_back(-1);
+	}
+
+	return true;
+}
 }
 #endif //MY_LIB_GRAPH_H
