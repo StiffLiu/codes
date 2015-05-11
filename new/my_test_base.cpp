@@ -249,7 +249,7 @@ StatPlotBase::~StatPlotBase(){
 	collectingThread.join();
 	std::cout << "exited" << std::endl;	
 }
-void TreePlot::show(){
+void GraphPlot::show(){
 	double xMin = DBL_MAX, xMax = -DBL_MAX, yMin = DBL_MAX, yMax = -DBL_MAX;
 	glClear(GL_COLOR_BUFFER_BIT);
 	for(size_t j = 0;j < points.size();j += 2){
@@ -283,11 +283,12 @@ void TreePlot::show(){
 	glLoadIdentity();
 	gluOrtho2D(xMin - marginX, xMax + marginX, 
 			yMin - marginY, yMax + marginY);
-	double color[3] = {1.0, 0.0, 0.0};
+	double color[3] = {0.0, 1.0, 0.0};
 	if(!points.empty()){
-		glPointSize(3.0);
+		glPointSize(this->pointSize);
 		drawPoints(&points[0], points.size() / 2, color); 
 
+		std::swap(color[0], color[1]);
 		if(!edges.empty())
 			drawEdges(&points[0], &edges[0], edges.size(), color);
 		unsigned int numString = points.size() / 2;

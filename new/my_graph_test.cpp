@@ -296,10 +296,75 @@ int test_eulerian(int argc, char *argv[]){
 }
 
 int test_math(int argc, char *argv[]){
+	std::cout << "1 : " << my_lib::floorTriSqrt1(1) << std::endl;
 	std::cout << "99 : " << my_lib::floorSqrt(99) << std::endl;
 	std::cout << "6 : " << my_lib::floorTriSqrt0(6) << std::endl;
 	std::cout << "15 : " << my_lib::floorTriSqrt0(15) << std::endl;
 	std::cout << "99 : " << my_lib::floorTriSqrt1(99) << std::endl;
+	for(int i = 0;i < 10000;++ i){
+		assert(my_lib::floorTriSqrt1(i * (i - 1) / 2 + (i - 1)) == i);
+		assert(my_lib::floorTriSqrt1(i * (i - 1) / 2 + i) == (i + 1));
+	}
+	return 0;
+}
+
+struct WeightGenerator{
+	unsigned int precision;
+	WeightGenerator(unsigned int precision) : precision(precision){
+	}
+	double operator()() const{
+		return rand() % precision / (double)precision;
+	}
+};
+
+int test_weighted_undir_graph(int argc, char *argv[]){
+	using namespace my_lib;
+	WeightedUndirAdjList wual;
+	bool isRandom = true;
+	if(isRandom){
+		for (int i = 0; i < 100; ++i){
+			randomWeightedUndirGraph((unsigned int)100, 0.3, wual, rand, WeightGenerator(1000));
+			cout << wual;
+			EagerPrimMST emst(wual);
+		}
+	}else{
+		const char *fileName = "/backup/documents/books/algos4/algs4.cs.princeton.edu/43mst/largeEWG.txt";
+		//const char *fileName = "F:\\documents\\books\\algos4\\algs4.cs.princeton.edu\\43mst\\largeEWG.txt";
+		TxtFileWeightedGraphReader reader(fileName);
+		reader >> wual;
+	}
+	if (wual.getEdges().size() < 2000)
+		cout << wual;
+	else
+		cout << "too much to be outputed" << std::endl;
+
+	cout << "----------------MST prim's algorithm----------------" << endl;
+	clock_t start = clock();
+	PrimMST mst(wual);
+	cout << "time: " << (clock() - start) << endl;
+	cout << "total weight: " << mst.getMSTWeight(wual) << endl;
+	cout << "----------------MST prim's algorithm eager approach----------------" << endl;
+	start = clock();
+	EagerPrimMST emst(wual);
+	cout << "time: " << (clock() - start) << endl;
+	cout << "total weight: " << emst.getMSTWeight(wual) << endl;
+	assert(mst == emst);
+
+	bool outputResult = false;
+	if(outputResult){
+		std::vector<const WeightedUndirAdjList::WeightedEdge*> edges;
+		mst.getEdges(wual, edges);
+		cout << "----------------mst--------------------" << endl;
+		for(auto e : edges)
+			cout << e->getV1() << ' ' << e->getV2() << "\t\t:" << e->getWeight() << std::endl;
+
+		edges.clear();
+		emst.getEdges(wual, edges);
+		cout << "----------------mst--------------------" << endl;
+		for (auto e : edges)
+			cout << e->getV1() << ' ' << e->getV2() << "\t\t:" << e->getWeight() << std::endl;
+	}
+	cin.get();
 	return 0;
 }
 
@@ -345,5 +410,6 @@ int test_regex(int argc, char *argv[]){
 }
 
 int main(int argc, char *argv[]){
-	return test_random_dir_graph(argc, argv);
+	return test_weighted_undir_graph(argc, argv);
+	//return test_math(argc, argv);
 }

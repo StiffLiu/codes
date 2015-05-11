@@ -7,6 +7,7 @@
 #include <string>
 #include <iostream>
 #include <cfloat>
+#include <unordered_map>
 
 namespace my_lib{
 	class TwoDPlot{
@@ -30,6 +31,7 @@ namespace my_lib{
 			virtual void init(){
 			}
 	};
+
 	class StatPlotBase : public TwoDPlot{
 		typedef TwoDPlot Super;
 	public:
@@ -66,21 +68,35 @@ namespace my_lib{
 		}
 		virtual bool getTitle(RenderInfo& renderInfo) const;
 	};
+
 	template<class Collector>
-		class StatPlot : public StatPlotBase{
-			Collector collector;
+	class StatPlot : public StatPlotBase{
+		Collector collector;
+	protected:
+		StatPlot(unsigned int numGraphs, const Collector& collector, 
+				double *colors = nullptr) : StatPlotBase(numGraphs, colors), collector(collector){
+		}
+		void init() override{
+			collectingThread = std::thread(collecting, this);
+		}
+		bool collect(double *values) override{
+			return collector(values);
+		}
+	};
+
+	class GraphPlot : public TwoDPlot{
 		protected:
-			StatPlot(unsigned int numGraphs, const Collector& collector, 
-					double *colors = nullptr) : StatPlotBase(numGraphs, colors), collector(collector){
+			std::vector<unsigned int> edges;
+			std::vector<double> points;
+			double pointSize = 3;
+			virtual const char *getString(unsigned int index) const{
+				return nullptr; 
 			}
-			void init() override{
-				collectingThread = std::thread(collecting, this);
-			}
-			bool collect(double *values) override{
-				return collector(values);
-			}
-		};
-	class TreePlot : public TwoDPlot{
+		public:
+			void show() override;
+	};
+
+	class TreePlot : public GraphPlot{
 		public:
 			template<class T, class F>
 				void calculate(T t, F f){
@@ -88,11 +104,6 @@ namespace my_lib{
 					points.clear();
 					calculate(t, f, 0.0, 0.2, -0.1);
 				}
-			void show() override;
-		protected:
-			virtual const char *getString(unsigned int index) const{
-				return nullptr; 
-			}
 		private:
 			struct NodePosition{
 				unsigned int l = 0, r = 0;
@@ -101,8 +112,6 @@ namespace my_lib{
 					return (lB + rB) / 2;
 				}
 			};
-			std::vector<unsigned int> edges;
-			std::vector<double> points;
 			template<class T, class F>
 			void calculate(T t, F f, double lB, double interval, double hInterval){
 				std::vector<NodePosition> positions;
@@ -159,5 +168,39 @@ namespace my_lib{
 				}
 			}
 	};
+
+	class UndirGraphPlot : public GraphPlot {
+	public:
+		template<class Graph, class CoordinateTraits, class Stream>
+		void init(const Graph& graph, Stream& error, const CoordinateTraits& traits){
+			pointSize = 6;
+			points.clear();
+			edges.clear();
+			std::unordered_map<unsigned int, unsigned int> vertexToPoint;
+			for(auto& vertex : *graph.getCoordinates()){
+				vertexToPoint[vertex.first] = points.size() / 2;
+				points.push_back(traits.x(vertex.second));
+				points.push_back(traits.y(vertex.second));
+			}
+			for(auto& vertex : graph.getEdges()){
+				auto pos = vertexToPoint.find(vertex.first);
+				if(pos == vertexToPoint.end()){
+					error << "vertex " << vertex.first << " does not have coordinates\n";
+					continue;
+				}
+				for(auto& v : vertex.second){
+					auto pos1 = vertexToPoint.find(v);
+					if(pos1 == vertexToPoint.end()){
+						error << "vertex " << v << " does not have coordinates\n";
+						error << "edge (" << vertex.first << ", " << v << ") ignored\n";
+						continue;
+					}
+					edges.push_back(pos->second);
+					edges.push_back(pos1->second);
+				}
+			}
+		}
+	};
+
 }
 #endif //MY_LIB_MY_TEST_BASE_H     

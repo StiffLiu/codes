@@ -295,7 +295,7 @@ protected:
 		usage.resize(numSlots);
 		n = 0;
 
-		for(auto i = 0;i < oldUsage.size();++ i)
+		for(size_t i = 0;i < oldUsage.size();++ i)
 			if(oldUsage[i]){
 				auto& kv = oldTable[i];
 				put(kv.first, kv.second);

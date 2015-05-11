@@ -379,6 +379,13 @@ public:
 	const Less& getComparator()const{
 		return comparator;
 	}
+
+	/*
+	 * get the underlying sequence used ty this heap.
+	 */
+	const Seq& getSeq(){
+		return seq;
+	}
 };
 template<class T, class Seq = std::vector<T>, class Less = std::less<T> >
 class BinaryHeap: public NaryHeap<T, Seq, Less> {

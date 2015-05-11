@@ -230,11 +230,10 @@ typedef DblDirAdjListT<> DblDirAdjList;
  * Second number is the number of edges
  * For the rest numbers, every two represet an edge of the graph.
  * */
-template<class Stream>
-class TxtStreamGraphReader{
-	Stream& stream;
+template<class Stream, class ReadOneEdge>
+class TxtStreamGraphReaderT{
 public:
-	TxtStreamGraphReader(Stream& stream) : stream(stream){
+	TxtStreamGraphReaderT(Stream& stream) : stream(stream){
 	}
 
 	operator bool() const {
@@ -242,37 +241,55 @@ public:
 	}
 
 	template<class Graph>
-	const TxtStreamGraphReader& operator>>(Graph& graph) const throw(std::exception){
+	const TxtStreamGraphReaderT& operator>>(Graph& graph) const throw(std::exception){
+		return read(graph);
+	}
+
+protected:
+	template<class Graph>
+	const TxtStreamGraphReaderT& read(Graph& graph) const{
 		int vertexCount;
 		if(stream >> vertexCount){
 			graph.reset(vertexCount);
 			int edgeCount;
 			if(stream >> edgeCount){
+				ReadOneEdge readOneEdge;
 				for(int i = 0;i < edgeCount;++ i){
-					int v1, v2;
-					if(stream >> v1 >> v2){
-						graph.addEdge(v1, v2);
-					}else{
+					if(!readOneEdge(stream, graph)){
 						std::stringstream os;
 						os << "error reading " << i << "th edge " << ", line " << __LINE__ << " file " << __FILE__;
 						throw std::invalid_argument(os.str());
 					}
-
 				}
 			}
 		}
 		return *this;
 	}
+
+	Stream& stream;
 };
 
-class TxtFileGraphReader{
+struct ReadOneEdge{
+	template<class Stream, class Graph>
+	bool operator()(Stream& stream, Graph& graph) const {
+		int v1, v2;
+		if(stream >> v1 >> v2){
+			graph.addEdge(v1, v2);
+			return true;
+		}
+		return false;
+	}
+};
+
+template<class Reader>
+class TxtFileGraphReaderT{
 	std::string filePath;
 	mutable bool result = false;
 public:
-	TxtFileGraphReader(const char *filePath) : filePath(filePath){
+	TxtFileGraphReaderT(const char *filePath) : filePath(filePath){
 	}
 
-	TxtFileGraphReader(const std::string& filePath) : filePath(filePath){
+	TxtFileGraphReaderT(const std::string& filePath) : filePath(filePath){
 	}
 
 	operator bool() const {
@@ -280,28 +297,31 @@ public:
 	}
 
 	template<class Graph>
-	const TxtFileGraphReader& operator>>(Graph& graph) const throw(std::exception) {
+	const TxtFileGraphReaderT& operator>>(Graph& graph) const throw(std::exception) {
 		std::ifstream in(filePath.c_str());
-		TxtStreamGraphReader<std::ifstream> reader(in);
+		Reader reader(in);
 		reader >> graph;
 		result = bool(in);
 		return *this;
 	}
 	
 };
+using TxtFileGraphReader = TxtFileGraphReaderT<TxtStreamGraphReaderT<std::ifstream, ReadOneEdge> >;
 
-class TxtFileStreamGraphReader{
+template<class Reader>
+class TxtFileStreamGraphReaderT{
 	std::ifstream stream;
-	TxtStreamGraphReader<std::ifstream> reader;
+	Reader reader;
 public:
-	TxtFileStreamGraphReader(const char *filePath) : stream(filePath), reader(stream){
+	TxtFileStreamGraphReaderT(const char *filePath) : stream(filePath), reader(stream){
 	}
 	template<class Graph>
-	const TxtFileStreamGraphReader& operator>>(Graph& graph) const throw(std::exception){
+	const TxtFileStreamGraphReaderT& operator>>(Graph& graph) const throw(std::exception){
 		reader >> graph;
 		return *this;
 	}
 };
+using TxtFileStreamGraphReader= TxtFileStreamGraphReaderT<TxtStreamGraphReaderT<std::ifstream, ReadOneEdge> >;
 
 template<class Derived>
 struct UndirSearchStrategy{
@@ -620,7 +640,7 @@ public:
 	}
 
 	unsigned int getRadius() const {
-		if(center == -1)
+		if(center == static_cast<unsigned int>(-1))
 			return 0;
 		auto pos = verticesProperties.find(center);
 		assert(pos != verticesProperties.end());
@@ -632,7 +652,7 @@ public:
 	}
 
 	unsigned int getDiameter(){
-		if(peripheral == -1)
+		if(peripheral == static_cast<unsigned int>(-1))
 			return 0;
 		auto pos = verticesProperties.find(peripheral);
 		assert(pos != verticesProperties.end());
@@ -644,7 +664,7 @@ public:
 	}
 
 	unsigned int getGirth() const {
-		if(girth == -1)
+		if(girth == static_cast<unsigned int>(-1))
 			return 0;
 		auto pos = verticesProperties.find(girth);
 		assert(pos != verticesProperties.end());
@@ -887,16 +907,12 @@ void randomUndirGraph(unsigned int vertexCount, double ratio, Graph& graph, Gene
 	selectedEdges.resize(numEdges);
 	randomSelect(totalEdges, numEdges, &selectedEdges[0], generator);
 	for(auto e : selectedEdges){
-		e += 1;
 		unsigned int v1 = floorTriSqrt1(e);
 		unsigned int v2 = e - v1 * (v1 - 1) / 2;
-		if(v2 == 0){
-			graph.addEdge(v1 - 1, v1 - 2);
-		}else{
-			graph.addEdge(v1, v2 -1);
-		}
+		graph.addEdge(v2, v1);
 	}
 }	
+
 
 /*
  * Generate random directed graph.
@@ -1364,5 +1380,458 @@ bool directedEulerianCycle(const Graph& graph, Path& path){
 
 	return true;
 }
+
+class EdgeBase{
+protected:
+	unsigned int v1, v2;
+public:
+	EdgeBase(unsigned int v1, unsigned int v2) : v1(v1), v2(v2){
+	}
+
+	bool operator==(const EdgeBase& e) const {
+		return v1 == e.v1 && v2 == e.v2;
+	}
+
+	bool operator<(const EdgeBase& e) const {
+		if(v1 == e.v1)
+			return v2 < e.v2;
+		return v1 < e.v1;
+	}
+
+	unsigned int getV1() const {
+		return v1;
+	}
+
+	unsigned int getV2() const {
+		return v2;
+	}
+
+	struct Hash{
+		size_t operator()(const EdgeBase& e) const {
+			return e.v1 * 31 + e.v2;
+		}
+	};
+
+	template<class Stream>
+	friend Stream& operator<<(Stream& os, const EdgeBase& e){
+		os << '(' << e.getV1() << ',' << e.getV2() << ')';
+	}
+};
+
+class UndirEdge : public EdgeBase{
+public:
+	UndirEdge(unsigned int v1, unsigned int v2) : EdgeBase(v2 < v1 ? EdgeBase(v2, v1) : EdgeBase(v1, v2)){
+	}
+};
+
+class DirEdge : public EdgeBase{
+public:
+	DirEdge(unsigned int v1, unsigned int v2) : EdgeBase(v1, v2){
+	}
+};
+
+template<class Edge, class Weight = double>
+class WeightedEdgeT : public Edge{
+	Weight weight;
+public:
+	WeightedEdgeT(unsigned int v1, unsigned int v2, Weight w) : Edge(v1, v2), weight(w){
+	}
+
+	Weight getWeight() const {
+		return weight;
+	}
+
+	template<class Stream>
+	friend Stream& operator<<(Stream& os, const WeightedEdgeT& e){
+		return os << '(' << e.getV1() << ',' << e.getV2()  << ',' << e.getWeight() << ')';
+	}
+};
+
+template<class Weight = double>
+using WeightedUndirEdgeT = WeightedEdgeT<UndirEdge, Weight>;
+
+template<class Weight = double>
+using WeightedDirEdgeT = WeightedEdgeT<DirEdge, Weight>;
+
+using WeightedUndirEdge = WeightedUndirEdgeT<>;
+
+using WeightedDirEdge = WeightedDirEdgeT<>;
+
+template<class Weight = double, template<class U, class V> class Map = DefaultStdMap, template<class U> class List = DefaultStdSet >
+class WeightedUndirAdjListT : protected UndirAdjListT<Map, List>{
+	typedef UndirAdjListT<Map, List> Super;
+	Weight minimum;
+public:
+	typedef WeightedUndirEdgeT<Weight> WeightedEdge;
+	//typedef std::unordered_set<WeightedEdge, EdgeBase::Hash> WeightedEdgeSet;
+	typedef std::set<WeightedEdge> WeightedEdgeSet;
+	WeightedUndirAdjListT(unsigned int vertexCount = 0, Weight minimum = Weight()) : Super(vertexCount), minimum(minimum){
+	}
+
+	void addEdge(unsigned int i, unsigned int j, Weight weight){
+		if(weight < minimum){
+			std::stringstream os;
+			os << "weight " << weight << " is smaller than the minimum " << minimum << ", line " << __LINE__ << " file " << __FILE__;
+			throw std::invalid_argument(os.str());
+		}
+		Super::addEdge(i, j);
+		weightedEdges.insert({i, j, weight});
+	}
+
+	void reset(unsigned int vertexCount){
+		Super::reset(vertexCount);
+		weightedEdges.clear();
+	}
+
+	const WeightedEdgeSet& getWeightedEdges() const {
+		return weightedEdges;
+	}
+
+	const WeightedEdge* getWeightedEdge(unsigned int i, unsigned int j) const {
+		auto pos = weightedEdges.find(WeightedEdge(i, j, Weight()));
+		if(pos == weightedEdges.end())
+			return nullptr;
+		return &*pos;
+	}
+
+	template<class Stream>
+	friend Stream& operator<<(Stream& stream, const WeightedUndirAdjListT& graph){
+		for (auto& edge: graph.getWeightedEdges()){
+			stream << edge.getV1() << ' ' << edge.getV2() << "\t\t: " << edge.getWeight() << "\n";
+		}
+		return stream;
+	}
+
+	using Super::isAdj;
+	using Super::getVertexCount;
+	using Super::getEdges;
+	using Super::degree;
+	using Super::adj;
+	using Super::extend;
+private:
+	WeightedEdgeSet weightedEdges;
+};
+
+using WeightedUndirAdjList = WeightedUndirAdjListT<>;
+
+struct ReadOneWeightedEdge{
+	template<class Stream, class Graph>
+	bool operator()(Stream& stream, Graph& graph) const {
+		int v1, v2;
+		double weight;
+		if(stream >> v1 >> v2 >> weight){
+			graph.addEdge(v1, v2, weight);
+			return true;
+		}
+		return false;
+	}
+};
+
+using TxtFileWeightedGraphReader = TxtFileGraphReaderT<TxtStreamGraphReaderT<std::ifstream, ReadOneWeightedEdge> >;
+
+using TxtFileStreamWeightedGraphReader= TxtFileStreamGraphReaderT<TxtStreamGraphReaderT<std::ifstream, ReadOneWeightedEdge> >;
+
+/*
+ * Prim's algorithm for calculating minimum spanning tree of weighted undirected graph.
+ * */
+class PrimMST{
+protected:
+	//vertex to parent map.
+	std::unordered_map<unsigned int, unsigned int> mst;
+	struct CompareWeight{
+		template<class T>
+		bool operator()(const T *e1, const T *e2) const{
+			return e1->getWeight() > e2->getWeight();
+		}
+	};
+
+	template<class Graph, template<class Edge> class PriorityQueue>
+	void calculate(const Graph& graph){
+		for (auto& vertex : graph.getEdges()){
+			if (mst.find(vertex.first) == mst.end()){
+				mst[vertex.first] = vertex.first;
+				//heap ordered by edge weight.
+				typedef const typename Graph::WeightedEdge* WEP;
+				//std::priority_queue<WEP, std::vector<WEP>, CompareWeight> pq;
+				PriorityQueue<WEP> pq;
+				for (auto v : vertex.second){
+					auto weightedEdge = graph.getWeightedEdge(vertex.first, v);
+					assert(weightedEdge != nullptr);
+					//std::cout << "pushing " << *weightedEdge << std::endl;
+					pq.push(v, weightedEdge);
+				}
+				while (!pq.empty()){
+					//pick up the edge with minimum weight.
+					auto e = pq.pop();
+					auto pos = mst.find(e->getV1());
+					unsigned int vertexNotInTree = e->getV1();
+					unsigned int vertexInTree = e->getV2();
+					//std::cout << "using " << *e << std::endl;
+					//each edge in the heap must have at one vertex already in the tree.
+					//so if e->v1 is not in the tree, e->v2 must be in the tree.
+					assert(pos != mst.end() || mst.find(e->getV2()) != mst.end());
+					if (pos != mst.end()){
+						//e->v1 already in the tree
+
+						//if e->v2 already in the tree
+						//this edge is ineligible.
+						if (mst.find(e->getV2()) != mst.end())
+							continue;
+
+						//e->v2 is not in the tree
+						vertexNotInTree = e->getV2();
+						vertexInTree = e->getV1();
+					}
+					auto adj = graph.adj(vertexNotInTree);
+					mst[vertexNotInTree] = vertexInTree;
+					if (adj != nullptr)
+						for (auto v : *adj)
+							if (mst.find(v) == mst.end()){
+								auto weightedEdge = graph.getWeightedEdge(vertexNotInTree, v);
+								assert(weightedEdge != nullptr);
+								//std::cout << "pushing " << *weightedEdge << std::endl;
+								pq.push(v, weightedEdge);
+							}
+				}
+			}
+		}
+	}
+
+	template<class Edge>
+	class PriorityQueueAdapter{
+		std::priority_queue<Edge, std::vector<Edge>, CompareWeight> pq;
+	public:
+		Edge pop(){
+			auto edge = pq.top();
+			pq.pop();
+			return edge;
+		}
+		void push(unsigned int v, Edge edge){
+			pq.push(edge);
+		}
+		bool empty(){
+			return pq.empty();
+		}
+	};
+
+	PrimMST(){
+	}
+public:
+	template<class Graph>
+	PrimMST(const Graph& graph){
+		calculate<Graph, PriorityQueueAdapter>(graph);
+	}
+
+	template<class Graph, class T>
+	void getEdges(const Graph& graph, T& edges){
+		for(auto& e: mst){
+			if(e.first != e.second){
+				auto edge = graph.getWeightedEdge(e.first, e.second);
+				if(edge != nullptr)
+					edges.push_back(edge);
+			}
+		}
+	}
+
+	template<class Graph>
+	auto getMSTWeight(const Graph& graph) const -> decltype(graph.getWeightedEdge(0, 0)->getWeight()) {
+		typedef decltype(getMSTWeight(graph)) Weight;
+		Weight sum = Weight();
+		for(auto& e: mst){
+			if(e.first != e.second){
+				auto edge = graph.getWeightedEdge(e.first, e.second);
+				if(edge != nullptr)
+					sum = sum + edge->getWeight();
+			}
+		}
+		return sum;
+	}
+	
+	bool operator==(const PrimMST& mst){
+		return this->mst == mst.mst;
+	}
+};
+/*
+ * Prim's algorithm eager version for calculating minimum spanning tree of weighted undirected graph.
+ * */
+class EagerPrimMST : public PrimMST{
+	//A small special index heap implementation to make our algorithm a little faster.
+	//In our special case, the value of T could only descease.
+	template<class Edge>
+	struct IndexedHeap{
+		std::unordered_map<unsigned int, std::pair<Edge, unsigned int> > maps;
+		std::vector<unsigned int> vertices;
+		static const int d = 2;
+
+		//For our special case, only a smaller weighted edge could be eligible.
+		//So do nothing when not this case.
+		void push(unsigned int vertex, Edge edge){
+			auto pos = maps.find(vertex);
+			if(pos == maps.end()){
+				maps[vertex] = {edge, vertices.size()};
+				vertices.push_back(vertex);
+				promote(vertices.size() - 1);
+			}else if(edge->getWeight() < pos->second.first->getWeight()){
+				pos->second.first = edge;
+				promote(pos->second.second);
+			}
+		}
+		Edge pop(){
+			auto minVertex = maps.find(vertices[0]);
+			assert(minVertex != maps.end());
+			Edge min = minVertex->second.first;
+			maps.erase(minVertex);
+			if (vertices.size() > 1){
+				auto s = vertices.size() - 1;
+				auto vertex = maps.find(vertices[s]);
+				assert(vertex != maps.end());
+				vertex->second.second = 0;
+				vertices[0] = vertices[s];
+				vertices.pop_back();
+				heapify(0);
+			}
+			else{
+				vertices.pop_back();
+			}
+			return min;
+		}
+		bool empty(){
+			return vertices.empty();
+		}
+		void promote(size_t index) {
+			if(index > 0){
+				size_t parent = (index - 1) / d;
+				auto parentVertex = maps.find(vertices[parent]);
+				auto vertex = maps.find(vertices[index]);
+				assert(parentVertex != maps.end());
+				assert(vertex != maps.end());
+				while(vertex->second.first->getWeight() < parentVertex->second.first->getWeight()){
+					std::swap(vertex->second.second, parentVertex->second.second);
+					std::swap(vertices[index], vertices[parent]);
+					index = parent;
+					if (index == 0)
+						break;
+					parent = (index - 1) / d;
+					//vertex = parentVertex;
+					parentVertex = maps.find(vertices[parent]);
+					assert(parentVertex != maps.end());
+				}
+			}
+		}
+		void heapify(size_t index){
+			auto vertex = maps.find(vertices[index]);
+			auto s = vertices.size();
+			assert(vertex != maps.end());
+			while(index < s){
+				/*size_t start = d * index + 1;
+				size_t end = std::min(s, start + d);
+				size_t smallest = index;
+				for(size_t i = start;i < end;++ i)
+					if(comparator(data[i], data[smallest]))
+						smallest = i;
+				if(index == smallest)
+					break;*/
+
+				//Assumming this is a binary heap.
+				//Need to change when the value of d is not 2.
+				size_t smallest = index;
+				size_t l = d * index + 1;
+				size_t r = l + 1;
+				auto smallestVertex = vertex;
+				if (l < s){
+					auto childVertex = maps.find(vertices[l]);
+					assert(childVertex != maps.end());
+					if (childVertex->second.first->getWeight() < smallestVertex->second.first->getWeight()){
+						smallest = l;
+						smallestVertex = childVertex;
+					}
+				}
+				if (r < s){
+					auto childVertex = maps.find(vertices[r]);
+					assert(childVertex != maps.end());
+					if (childVertex->second.first->getWeight() < smallestVertex->second.first->getWeight()){
+						smallest = r;
+						smallestVertex = childVertex;
+					}
+				}
+				if (smallest == index)
+					break;
+				std::swap(vertex->second.second, smallestVertex->second.second);
+				std::swap(vertices[index], vertices[smallest]);
+				index = smallest;
+				//vertex = smallestVertex;
+			}
+		}
+	};
+public:
+	template<class Graph>
+	EagerPrimMST(const Graph& graph){
+		calculate<Graph, IndexedHeap>(graph);
+	}
+};
+
+template<class Graph, class WeightGenerator>
+struct RandomWeightedGraphGenerationAdapter{
+	Graph& graph;
+	WeightGenerator& generator;
+	RandomWeightedGraphGenerationAdapter(Graph& graph, WeightGenerator& generator) : graph(graph), generator(generator){
+	}
+	void reset(unsigned int vertexCount){
+		graph.reset(vertexCount);
+	}
+	void addEdge(unsigned int v1, unsigned int v2){
+		graph.addEdge(v1, v2, generator());
+	}
+};
+
+template<class Graph, class Generator, class WeightGenerator>
+void randomWeightedUndirGraph(unsigned int vertexCount, double ratio, Graph& graph,
+	       			Generator generator, WeightGenerator weightGenerator){
+	RandomWeightedGraphGenerationAdapter<Graph, WeightGenerator>  rwgga(graph, weightGenerator);
+	randomUndirGraph(vertexCount, ratio, rwgga, generator);
+}
+
+template<class Graph, class Generator, class WeightGenerator>
+void randomWeightedDirGraph(unsigned int vertexCount, double ratio, Graph& graph,
+	       			Generator generator, WeightGenerator weightGenerator){
+	RandomWeightedGraphGenerationAdapter<Graph, WeightGenerator>  rwgga(graph, weightGenerator);
+	randomDirGraph(vertexCount, ratio, rwgga, generator);
+}
+
+template<class Graph, class Generator, class WeightGenerator>
+void randomWeightedDAG(unsigned int vertexCount, double ratio, Graph& graph,
+	       			Generator generator, WeightGenerator weightGenerator){
+	RandomWeightedGraphGenerationAdapter<Graph, WeightGenerator>  rwgga(graph, weightGenerator);
+	randomDAG(vertexCount, ratio, rwgga, generator);
+}
+
+template<class UnderlyingGraph, class Coordinate>
+class EuclideanGraphT : public UnderlyingGraph{
+	std::unordered_map<unsigned int, Coordinate> points;
+public:
+	EuclideanGraphT(unsigned int vertexCount = 0) : UnderlyingGraph(vertexCount){
+	}
+
+	const Coordinate* getCoordinate(unsigned int v) const {
+		auto pos = points.find(v);
+		if(pos == points.end())
+			return nullptr;
+		return &pos->second;
+	}
+
+	auto getCoordinates() const -> decltype(&points){
+		return &points;
+	}
+
+	void setCoordinate(unsigned int v, const Coordinate& coordinate) {
+		UnderlyingGraph::check(v);
+		points[v] = coordinate;
+	}
+
+	void clearPoints(){
+		points.clear();
+	}
+};
+
 }
 #endif //MY_LIB_GRAPH_H

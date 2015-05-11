@@ -116,7 +116,7 @@ public:
 template<class Key, class Comparator>
 struct KeyComparator{
 	Comparator comparator;
-	KeyComparator(const Comparator = Comparator()) : comparator(comparator){
+	KeyComparator(const Comparator comparator = Comparator()) : comparator(comparator){
 	}
 	int operator()(const Key& k1, const Key& k2) const {
 		if(comparator(k1, k2))
@@ -421,7 +421,7 @@ private:
 
     // check that ranks are consistent
     bool isRankConsistent() const {
-        for (int i = 0; i < size(); i++){
+        for (unsigned int i = 0; i < size(); i++){
 	    const Key* key = select(i);
             if (key == nullptr || i != rank(*key)) return false;
 	}
@@ -1776,7 +1776,7 @@ int test(int argc, char *argv[]){
 	unsigned int nums[count];
 	UIntValues vals(count, nums, UIntValues::RANDOM);
 	//plot.print();
-	//BSTTreePlot<UIntValues> testPlot(vals);
+	BSTTreePlot<UIntValues> testPlot(vals);
 	
 	//HashChainSizePlot  testPlot;
 	//LinearProbingPlot testPlot;
@@ -1788,7 +1788,7 @@ int test(int argc, char *argv[]){
 	//HashTableLoadFactorCompare<my_lib::SeparateChainingHashTable<unsigned int, unsigned int, EqualComparisonCounter> >  testPlot(lfs);
 	//double lfs[5] = {0.1, 0.2, 0.5, 0.7, 0.9};
 	//HashTableLoadFactorCompare<my_lib::LinearProbingHashTable<unsigned int, unsigned int, EqualComparisonCounter> >  testPlot(lfs);
-	SymbolTableCompare testPlot;
+	//SymbolTableCompare testPlot;
 	//CompareWithStdHashMap testPlot;
 	//DiffChainTypeCompare testPlot;
 	//LinearProbingCompareEstimate testPlot;
