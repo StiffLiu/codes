@@ -319,6 +319,26 @@ struct WeightGenerator{
 
 int test_weighted_undir_graph(int argc, char *argv[]){
 	using namespace my_lib;
+	{
+		WeightedDirAdjList wdal;
+		//randomWeightedDirGraph((unsigned int)100, 0.3, wdal, rand, WeightGenerator(1000));
+		//cout << wdal;
+		const char *fileName = "F:\\documents\\books\\algos4\\algs4.cs.princeton.edu\\44sp\\tinyEWD.txt";
+		TxtFileWeightedGraphReader reader(fileName);
+		reader >> wdal;
+		DijkstraShortestPath sp(wdal, 0);
+		for (unsigned int i = 0; i < wdal.getVertexCount(); ++i){
+			std::vector<unsigned int> path;
+			if (sp.getPath(i, &path)){
+				for (auto v : path)
+					cout << v << " ";
+				cout << endl;
+			}else{
+				cout << "Cannot reach " << i << " from 0" << endl;
+			}
+		}
+		cin.get();
+	}
 	WeightedUndirAdjList wual;
 	bool isRandom = true;
 	if(isRandom){
@@ -342,13 +362,20 @@ int test_weighted_undir_graph(int argc, char *argv[]){
 	clock_t start = clock();
 	PrimMST mst(wual);
 	cout << "time: " << (clock() - start) << endl;
-	cout << "total weight: " << mst.getMSTWeight(wual) << endl;
+
+	auto weight1 = mst.getMSTWeight(wual);
+	cout << "total weight: " << weight1 << endl;
 	cout << "----------------MST prim's algorithm eager approach----------------" << endl;
 	start = clock();
 	EagerPrimMST emst(wual);
 	cout << "time: " << (clock() - start) << endl;
-	cout << "total weight: " << emst.getMSTWeight(wual) << endl;
-	assert(mst == emst);
+
+	auto weight2 = emst.getMSTWeight(wual);
+	cout << "total weight: " << weight2 << endl;
+	// It's possible that different algorithm will find different MST for a graph.
+	// This is especially true when different edges have equal weight
+	//assert(mst == emst);
+	assert(weight1 == weight2);
 
 	bool outputResult = false;
 	if(outputResult){

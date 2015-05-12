@@ -1457,25 +1457,25 @@ using WeightedUndirEdge = WeightedUndirEdgeT<>;
 
 using WeightedDirEdge = WeightedDirEdgeT<>;
 
-template<class Weight = double, template<class U, class V> class Map = DefaultStdMap, template<class U> class List = DefaultStdSet >
-class WeightedUndirAdjListT : protected UndirAdjListT<Map, List>{
-	typedef UndirAdjListT<Map, List> Super;
+template<class UnderlyingAdjList, class Weight, template<class T> class WeightedEdgeT>
+class WeightedAdjListT : protected UnderlyingAdjList{
+	typedef UnderlyingAdjList Super;
 	Weight minimum;
 public:
-	typedef WeightedUndirEdgeT<Weight> WeightedEdge;
+	typedef WeightedEdgeT<Weight> WeightedEdge;
 	//typedef std::unordered_set<WeightedEdge, EdgeBase::Hash> WeightedEdgeSet;
 	typedef std::set<WeightedEdge> WeightedEdgeSet;
-	WeightedUndirAdjListT(unsigned int vertexCount = 0, Weight minimum = Weight()) : Super(vertexCount), minimum(minimum){
+	WeightedAdjListT(unsigned int vertexCount = 0, Weight minimum = Weight()) : Super(vertexCount), minimum(minimum){
 	}
 
 	void addEdge(unsigned int i, unsigned int j, Weight weight){
-		if(weight < minimum){
+		if (weight < minimum){
 			std::stringstream os;
 			os << "weight " << weight << " is smaller than the minimum " << minimum << ", line " << __LINE__ << " file " << __FILE__;
 			throw std::invalid_argument(os.str());
 		}
 		Super::addEdge(i, j);
-		weightedEdges.insert({i, j, weight});
+		weightedEdges.insert({ i, j, weight });
 	}
 
 	void reset(unsigned int vertexCount){
@@ -1489,14 +1489,14 @@ public:
 
 	const WeightedEdge* getWeightedEdge(unsigned int i, unsigned int j) const {
 		auto pos = weightedEdges.find(WeightedEdge(i, j, Weight()));
-		if(pos == weightedEdges.end())
+		if (pos == weightedEdges.end())
 			return nullptr;
 		return &*pos;
 	}
 
 	template<class Stream>
-	friend Stream& operator<<(Stream& stream, const WeightedUndirAdjListT& graph){
-		for (auto& edge: graph.getWeightedEdges()){
+	friend Stream& operator<<(Stream& stream, const WeightedAdjListT& graph){
+		for (auto& edge : graph.getWeightedEdges()){
 			stream << edge.getV1() << ' ' << edge.getV2() << "\t\t: " << edge.getWeight() << "\n";
 		}
 		return stream;
@@ -1505,14 +1505,37 @@ public:
 	using Super::isAdj;
 	using Super::getVertexCount;
 	using Super::getEdges;
-	using Super::degree;
-	using Super::adj;
 	using Super::extend;
-private:
+protected:
 	WeightedEdgeSet weightedEdges;
 };
 
+template<class Weight = double, template<class U, class V> class Map = DefaultStdMap, template<class U> class List = DefaultStdSet >
+class WeightedUndirAdjListT : public WeightedAdjListT<UndirAdjListT<Map, List>, Weight, WeightedUndirEdgeT>{
+	typedef WeightedAdjListT<UndirAdjListT<Map, List>, Weight, WeightedUndirEdgeT> Super;
+	typedef UndirAdjListT<Map, List> GrandFather;
+public:
+	WeightedUndirAdjListT(unsigned int vertexCount = 0, Weight minimum = Weight()) : Super(vertexCount, minimum){
+	}
+	using Super::degree;
+	using GrandFather::adj;
+};
+
 using WeightedUndirAdjList = WeightedUndirAdjListT<>;
+
+template<class Weight = double, template<class U, class V> class Map = DefaultStdMap, template<class U> class List = DefaultStdSet >
+class WeightedDirAdjListT : public WeightedAdjListT<DirAdjListT<Map, List>, Weight, WeightedDirEdgeT>{
+	typedef WeightedAdjListT<DirAdjListT<Map, List>, Weight, WeightedDirEdgeT> Super;
+	typedef DirAdjListT<Map, List> GrandFather;
+public:
+	WeightedDirAdjListT(unsigned int vertexCount = 0, Weight minimum = Weight()) : Super(vertexCount, minimum){
+	}
+	using GrandFather::outAdj;
+	using GrandFather::outDegree;
+	using GrandFather::isMap;
+};
+
+using WeightedDirAdjList = WeightedDirAdjListT<>;
 
 struct ReadOneWeightedEdge{
 	template<class Stream, class Graph>
@@ -1651,93 +1674,110 @@ public:
 		return this->mst == mst.mst;
 	}
 };
-/*
- * Prim's algorithm eager version for calculating minimum spanning tree of weighted undirected graph.
- * */
-class EagerPrimMST : public PrimMST{
-	//A small special index heap implementation to make our algorithm a little faster.
-	//In our special case, the value of T could only descease.
-	template<class Edge>
-	struct IndexedHeap{
-		std::unordered_map<unsigned int, std::pair<Edge, unsigned int> > maps;
-		std::vector<unsigned int> vertices;
-		static const int d = 2;
 
-		//For our special case, only a smaller weighted edge could be eligible.
-		//So do nothing when not this case.
-		void push(unsigned int vertex, Edge edge){
-			auto pos = maps.find(vertex);
-			if(pos == maps.end()){
-				maps[vertex] = {edge, vertices.size()};
-				vertices.push_back(vertex);
-				promote(vertices.size() - 1);
-			}else if(edge->getWeight() < pos->second.first->getWeight()){
-				pos->second.first = edge;
-				promote(pos->second.second);
-			}
+//a specialized indexed heap for weighted edge.
+template<class WeightedEdge>
+struct IndexedMinWeightedEdgeHeap{
+	typedef std::unordered_map<unsigned int, std::pair<WeightedEdge, unsigned int> > Maps;
+	typedef std::vector<unsigned int> Vertices;
+	static const int d = 2;
+
+	//Not a real heap push operation. :-)
+	//For our special case, only a smaller weighted edge could be eligible.
+	//So do nothing when not this case.
+	bool push(unsigned int vertex, WeightedEdge edge){
+		auto pos = maps.find(vertex);
+		if (pos == maps.end()){
+			maps[vertex] = { edge, vertices.size() };
+			vertices.push_back(vertex);
+			promote(vertices.size() - 1);
+			return true;
 		}
-		Edge pop(){
-			auto minVertex = maps.find(vertices[0]);
-			assert(minVertex != maps.end());
-			Edge min = minVertex->second.first;
-			maps.erase(minVertex);
-			if (vertices.size() > 1){
-				auto s = vertices.size() - 1;
-				auto vertex = maps.find(vertices[s]);
-				assert(vertex != maps.end());
-				vertex->second.second = 0;
-				vertices[0] = vertices[s];
-				vertices.pop_back();
-				heapify(0);
-			}
-			else{
-				vertices.pop_back();
-			}
-			return min;
+		else if (edge->getWeight() < pos->second.first->getWeight()){
+			pos->second.first = edge;
+			promote(pos->second.second);
+			return true;
 		}
-		bool empty(){
-			return vertices.empty();
-		}
-		void promote(size_t index) {
-			if(index > 0){
-				size_t parent = (index - 1) / d;
-				auto parentVertex = maps.find(vertices[parent]);
-				auto vertex = maps.find(vertices[index]);
-				assert(parentVertex != maps.end());
-				assert(vertex != maps.end());
-				while(vertex->second.first->getWeight() < parentVertex->second.first->getWeight()){
-					std::swap(vertex->second.second, parentVertex->second.second);
-					std::swap(vertices[index], vertices[parent]);
-					index = parent;
-					if (index == 0)
-						break;
-					parent = (index - 1) / d;
-					//vertex = parentVertex;
-					parentVertex = maps.find(vertices[parent]);
-					assert(parentVertex != maps.end());
-				}
-			}
-		}
-		void heapify(size_t index){
-			auto vertex = maps.find(vertices[index]);
-			auto s = vertices.size();
+		return false;
+	}
+	bool get(unsigned int vertex, WeightedEdge& edge){
+		auto pos = maps.find(vertex);
+		if (pos == maps.end())
+			return false;
+		edge = pos->second.first;
+		return true;
+	}
+	WeightedEdge pop(){
+		auto minVertex = maps.find(vertices[0]);
+		assert(minVertex != maps.end());
+		WeightedEdge min = minVertex->second.first;
+		maps.erase(minVertex);
+		if (vertices.size() > 1){
+			auto s = vertices.size() - 1;
+			auto vertex = maps.find(vertices[s]);
 			assert(vertex != maps.end());
-			while(index < s){
-				/*size_t start = d * index + 1;
+			vertex->second.second = 0;
+			vertices[0] = vertices[s];
+			vertices.pop_back();
+			heapify(0);
+		}
+		else{
+			vertices.pop_back();
+		}
+		return min;
+	}
+
+	std::pair<unsigned int, WeightedEdge> popWithVertex(){
+		auto vertex = vertices[0];
+		return {vertex, pop()};
+	}
+
+	bool empty(){
+		return vertices.empty();
+	}
+	void promote(size_t index) {
+		if (index > 0){
+			size_t parent = (index - 1) / d;
+			auto parentVertex = maps.find(vertices[parent]);
+			auto vertex = maps.find(vertices[index]);
+			assert(parentVertex != maps.end());
+			assert(vertex != maps.end());
+			while (vertex->second.first->getWeight() < parentVertex->second.first->getWeight()){
+				std::swap(vertex->second.second, parentVertex->second.second);
+				std::swap(vertices[index], vertices[parent]);
+				index = parent;
+				if (index == 0)
+					break;
+				parent = (index - 1) / d;
+				//vertex = parentVertex;
+				parentVertex = maps.find(vertices[parent]);
+				assert(parentVertex != maps.end());
+			}
+		}
+	}
+	void heapify(size_t index){
+		auto vertex = maps.find(vertices[index]);
+		auto s = vertices.size();
+		assert(vertex != maps.end());
+		while (index < s){
+			size_t smallest = index;
+			auto smallestVertex = vertex;
+			if (d != 2){
+				size_t start = d * index + 1;
 				size_t end = std::min(s, start + d);
 				size_t smallest = index;
-				for(size_t i = start;i < end;++ i)
-					if(comparator(data[i], data[smallest]))
+				for (size_t i = start; i < end; ++i){
+					auto childVertex = maps.find(vertices[i]);
+					assert(childVertex != maps.end());
+					if (childVertex->second.first->getWeight() < smallestVertex->second.first->getWeight()){
 						smallest = i;
-				if(index == smallest)
-					break;*/
-
-				//Assumming this is a binary heap.
-				//Need to change when the value of d is not 2.
-				size_t smallest = index;
+						smallestVertex = childVertex;
+					}
+				}
+			}else{
+				//avoiding use for loop for binary heap, so that it would be a little faster
 				size_t l = d * index + 1;
 				size_t r = l + 1;
-				auto smallestVertex = vertex;
 				if (l < s){
 					auto childVertex = maps.find(vertices[l]);
 					assert(childVertex != maps.end());
@@ -1754,19 +1794,87 @@ class EagerPrimMST : public PrimMST{
 						smallestVertex = childVertex;
 					}
 				}
-				if (smallest == index)
-					break;
-				std::swap(vertex->second.second, smallestVertex->second.second);
-				std::swap(vertices[index], vertices[smallest]);
-				index = smallest;
-				//vertex = smallestVertex;
 			}
+			if (smallest == index)
+				break;
+			std::swap(vertex->second.second, smallestVertex->second.second);
+			std::swap(vertices[index], vertices[smallest]);
+			index = smallest;
+			//vertex = smallestVertex;
 		}
-	};
+	}
+private:
+	Maps maps;
+	Vertices vertices;
+};
+/*
+ * Prim's algorithm eager version for calculating minimum spanning tree of weighted undirected graph.
+ * */
+class EagerPrimMST : public PrimMST{
 public:
 	template<class Graph>
 	EagerPrimMST(const Graph& graph){
-		calculate<Graph, IndexedHeap>(graph);
+		calculate<Graph, IndexedMinWeightedEdgeHeap>(graph);
+	}
+};
+
+/*
+ * Dijkstra's algorithm for computing shortest path of a weighted directed graph with non-negative weights. 
+ * When edge's have negative weights, the behaviour of this algorithm is undefined.
+ * */
+class DijkstraShortestPath{
+	//vertex to parent map.
+	std::unordered_map<unsigned int, unsigned int> sp;
+	unsigned int src;
+public:
+	template<class Graph>
+	DijkstraShortestPath(const Graph& graph, unsigned int src){
+		struct EdgeWeight{
+			unsigned int p;
+			double weight;
+			EdgeWeight(unsigned int p = -1, double weight = 0) : weight(weight), p(p){
+			}
+			EdgeWeight* operator->(){
+				return this;
+			}
+			double getWeight(){
+				return weight;
+			}
+		};
+		IndexedMinWeightedEdgeHeap<EdgeWeight> pq;
+		pq.push(src, EdgeWeight(src, 0));
+
+		while (!pq.empty()){
+			auto edge = pq.popWithVertex();
+			auto adj = graph.outAdj(edge.first);
+			sp[edge.first] = edge.second.p;
+			if(adj)
+				for(auto v : *adj)
+					if(sp.find(v) == sp.end()){
+						auto weightedEdge = graph.getWeightedEdge(edge.first, v);
+						assert(weightedEdge != nullptr);
+						EdgeWeight edgeWeight(edge.first, edge.second.getWeight() + weightedEdge->getWeight());
+						pq.push(v, edgeWeight);
+					}
+		}
+		sp.erase(src);
+		this->src = src;
+	}
+	template<class Path>
+	bool getPath(unsigned int vertex, Path *path){
+		auto pos = sp.find(vertex);
+		if (pos == sp.end())
+			return false;
+		if (path != nullptr){
+			while (pos != sp.end()){
+				path->push_back(pos->second);
+				pos = sp.find(pos->second);
+			}
+			assert(path->back() == src);
+		}
+		std::reverse(path->begin(), path->end());
+		path->push_back(vertex);
+		return true;
 	}
 };
 
