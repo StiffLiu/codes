@@ -113,6 +113,10 @@ protected:
 		vertexCount += count;
 	}
 
+	Edges getEdges() {
+		return edges;
+	}
+
 	Edges edges;
 	unsigned int vertexCount;
 };
@@ -1556,6 +1560,8 @@ using TxtFileStreamWeightedGraphReader= TxtFileStreamGraphReaderT<TxtStreamGraph
 
 /*
  * Prim's algorithm for calculating minimum spanning tree of weighted undirected graph.
+ * Time complexity : O(E*log(E))
+ * 		     E is the number of edges
  * */
 class PrimMST{
 protected:
@@ -1809,6 +1815,9 @@ private:
 };
 /*
  * Prim's algorithm eager version for calculating minimum spanning tree of weighted undirected graph.
+ * Time complexity : O(E*log(V))
+ * 		     E is the number of edges
+ * 		     V is the number of vertices
  * */
 class EagerPrimMST : public PrimMST{
 public:
@@ -1818,48 +1827,11 @@ public:
 	}
 };
 
-/*
- * Dijkstra's algorithm for computing shortest path of a weighted directed graph with non-negative weights. 
- * When edge's have negative weights, the behaviour of this algorithm is undefined.
- * */
-class DijkstraShortestPath{
+class ShortestPathBase{
+protected:
 	//vertex to parent map.
 	std::unordered_map<unsigned int, unsigned int> sp;
-	unsigned int src;
 public:
-	template<class Graph>
-	DijkstraShortestPath(const Graph& graph, unsigned int src){
-		struct EdgeWeight{
-			unsigned int p;
-			double weight;
-			EdgeWeight(unsigned int p = -1, double weight = 0) : weight(weight), p(p){
-			}
-			EdgeWeight* operator->(){
-				return this;
-			}
-			double getWeight(){
-				return weight;
-			}
-		};
-		IndexedMinWeightedEdgeHeap<EdgeWeight> pq;
-		pq.push(src, EdgeWeight(src, 0));
-
-		while (!pq.empty()){
-			auto edge = pq.popWithVertex();
-			auto adj = graph.outAdj(edge.first);
-			sp[edge.first] = edge.second.p;
-			if(adj)
-				for(auto v : *adj)
-					if(sp.find(v) == sp.end()){
-						auto weightedEdge = graph.getWeightedEdge(edge.first, v);
-						assert(weightedEdge != nullptr);
-						EdgeWeight edgeWeight(edge.first, edge.second.getWeight() + weightedEdge->getWeight());
-						pq.push(v, edgeWeight);
-					}
-		}
-		sp.erase(src);
-		this->src = src;
-	}
 	template<class Path>
 	bool getPath(unsigned int vertex, Path *path){
 		auto pos = sp.find(vertex);
@@ -1870,11 +1842,176 @@ public:
 				path->push_back(pos->second);
 				pos = sp.find(pos->second);
 			}
-			assert(path->back() == src);
 		}
 		std::reverse(path->begin(), path->end());
 		path->push_back(vertex);
 		return true;
+	}
+};
+/*
+ * Dijkstra's algorithm for computing shortest path of a weighted directed graph with non-negative weights. 
+ * When edge's have negative weights, the behaviour of this algorithm is undefined.
+ * Edge weights must be non-negative
+ * Time complexity: O(E*log(V))
+ * 		    With  E is the number of edge, V is the number of vertices.
+ * */
+class DijkstraShortestPath : public ShortestPathBase{
+	unsigned int src;
+public:
+	template<class Graph>
+	DijkstraShortestPath(const Graph& graph, unsigned int src){
+		struct ShortestDist{
+			unsigned int p;
+			double weight;
+			ShortestDist(unsigned int p = -1, double weight = 0) : weight(weight), p(p){
+			}
+			ShortestDist* operator->(){
+				return this;
+			}
+			double getWeight(){
+				return weight;
+			}
+		};
+		IndexedMinWeightedEdgeHeap<ShortestDist> pq;
+		pq.push(src, ShortestDist(src, 0));
+
+		while (!pq.empty()){
+			auto shortestDist = pq.popWithVertex();
+			auto adj = graph.outAdj(shortestDist.first);
+			sp[shortestDist.first] = shortestDist.second.p;
+			if(adj)
+				for(auto v : *adj)
+					if(sp.find(v) == sp.end()){
+						auto weightedEdge = graph.getWeightedEdge(shortestDist.first, v);
+						assert(weightedEdge != nullptr);
+						ShortestDist newShortestDist(shortestDist.first, shortestDist.second.getWeight() + weightedEdge->getWeight());
+						pq.push(v, newShortestDist);
+					}
+		}
+		sp.erase(src);
+		this->src = src;
+	}
+};
+
+/*
+ * Shortest path in directed acyclic graph.
+ * Edge weights can be arbitrary
+ * Time complexity: O(E)
+ * 		    E is the number of edge.
+ * */
+class DAGShortestPath : public ShortestPathBase{
+public:
+	template<class Graph>
+	DAGShortestPath(const Graph& graph) throw(std::invalid_argument) {
+		Topological topological(graph);
+		if(topological.directedCycle() != nullptr)
+			throw std::invalid_argument("given graph is not a directed acyclic graph");
+		auto order = topological.order();
+		std::unordered_map<unsigned int, double> dists;
+		for(auto src : *order){
+			auto adj = graph.outAdj(src);
+			if(adj)
+				for(auto v : *adj){
+					auto weightedEdge = graph.getWeightedEdge(src, v);
+					assert(weightedEdge != nullptr);
+					auto pos = dists.find(v);
+					auto newDist = dists[src] + weightedEdge->getWeight();
+					if(pos == dists.end() || newDist < pos->second){
+						dists[v] = newDist;
+						sp[v] = src;
+					}
+				}
+		}
+	}
+};
+
+/*
+ * BellmanFord algorithm to compute shortest path in a directed graph.
+ * Edge weights can be arbitrary.
+ * Worst case time complexity: O(V*E) 
+ * General case time complexity: O(E + V)
+ * 			       V is the number of vertices
+ * 			       E is the number of edges
+ */
+class BellmanFordShortestPath : public ShortestPathBase{
+	unsigned int src;
+	std::vector<unsigned int> cycle;
+public:
+	template<class Graph>
+	BellmanFordShortestPath(const Graph& graph, unsigned int src){
+		std::unordered_map<unsigned int, double> dists;
+		std::unordered_set<unsigned int> inQueue;
+		std::priority_queue<unsigned int> vertices;
+		/*shortest path tree used to calculate if a cycle exists*/
+		class EdgeRemovableAdjList : public DirAdjList{
+		public:
+			EdgeRemovableAdjList(unsigned int vertexCount) : DirAdjList(vertexCount){
+			}
+			bool removeEdge(unsigned int v1, unsigned int v2){
+				auto edges = getEdges();
+				auto pos = edges.find(v1);
+				if(pos == edges.end())
+					return false;
+				auto pos1 = pos->second.find(v2);
+				if(pos1 == pos->second.end())
+					return  false;
+				pos->second.erase(pos1);
+				return true;
+			}
+		}spt(graph.getVertexCount());
+		vertices.push(src);
+
+		unsigned int count = 0;
+		while(!vertices.empty()){
+			unsigned int src = vertices.top();
+			auto adj = graph.outAdj(src);
+
+			vertices.pop();
+			inQueue.erase(src);
+
+			if(adj)
+				for(auto v : *adj){
+					auto weightedEdge = graph.getWeightedEdge(src, v);
+					assert(weightedEdge != nullptr);
+					auto pos = dists.find(v);
+					auto newDist = dists[src] + weightedEdge->getWeight();
+					if(pos == dists.end()){
+						dists[v] = newDist;
+						spt.addEdge(src, v);
+						sp[v] = src;
+						assert(inQueue.find(v) == inQueue.end());
+						inQueue.insert(v);
+						vertices.push(v);
+					}else if(newDist < pos->second){
+						auto& parent = sp[v];
+						bool isRemoved = spt.removeEdge(parent, v); 
+						assert(isRemoved);
+						dists[v] = newDist;
+						spt.addEdge(src, v);
+						parent = src;
+						if(inQueue.find(v) == inQueue.end()){
+							inQueue.insert(v);
+							vertices.push(v);
+						}
+					}
+				}
+			if(++count % spt.getVertexCount() == 0){
+				Topological topological(spt);
+				auto cycle = topological.directedCycle();
+				if(cycle != nullptr){
+					this->cycle = *cycle;
+					break;
+				}
+			}
+		}
+		this->src = src;
+	}
+	bool hasNegativeCycle(){
+		return !cycle.empty();
+	}
+	
+	auto negativeCycle() const ->decltype((cycle)){
+		return cycle;
 	}
 };
 
@@ -1915,29 +2052,29 @@ void randomWeightedDAG(unsigned int vertexCount, double ratio, Graph& graph,
 
 template<class UnderlyingGraph, class Coordinate>
 class EuclideanGraphT : public UnderlyingGraph{
-	std::unordered_map<unsigned int, Coordinate> points;
+	std::unordered_map<unsigned int, Coordinate> coordinates;
 public:
 	EuclideanGraphT(unsigned int vertexCount = 0) : UnderlyingGraph(vertexCount){
 	}
 
 	const Coordinate* getCoordinate(unsigned int v) const {
-		auto pos = points.find(v);
-		if(pos == points.end())
+		auto pos = coordinates.find(v);
+		if(pos == coordinates.end())
 			return nullptr;
 		return &pos->second;
 	}
 
-	auto getCoordinates() const -> decltype(&points){
-		return &points;
+	auto getCoordinates() const -> decltype(&coordinates){
+		return &coordinates;
 	}
 
 	void setCoordinate(unsigned int v, const Coordinate& coordinate) {
 		UnderlyingGraph::check(v);
-		points[v] = coordinate;
+		coordinates[v] = coordinate;
 	}
 
-	void clearPoints(){
-		points.clear();
+	void clearCoordinates(){
+		coordinates.clear();
 	}
 };
 

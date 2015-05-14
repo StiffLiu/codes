@@ -317,28 +317,68 @@ struct WeightGenerator{
 	}
 };
 
+/*
+ * method: 1 for Dijkstra's algorithm, 2 for acyclic directed graph, 3 for BellmanFord algorithm
+ * */
+int test_shortest_path(const char *fileName, unsigned int method){
+	using namespace my_lib;
+	WeightedDirAdjList wdal = (method == 3 ? WeightedDirAdjList{ 0, -DBL_MAX } : WeightedDirAdjList{ 0, 0.0 });
+	//randomWeightedDirGraph((unsigned int)100, 0.3, wdal, rand, WeightGenerator(1000));
+	//cout << wdal;
+	TxtFileWeightedGraphReader reader(fileName);
+	reader >> wdal;
+	ShortestPathBase sp;
+	switch(method){
+		case 1:{DijkstraShortestPath dijkstra(wdal, 0); sp = dijkstra;break;}
+		case 2:{DAGShortestPath dag(wdal); sp = dag;break;}
+		case 3:{BellmanFordShortestPath bellmanFord(wdal, 0); sp = bellmanFord; break; }
+	}
+	for (unsigned int i = 0; i < wdal.getVertexCount(); ++i){
+		std::vector<unsigned int> path;
+		if (sp.getPath(i, &path)){
+			for (auto v : path)
+				cout << v << " ";
+			cout << endl;
+		}else{
+			cout << "Cannot reach " << i << " from 0" << endl;
+		}
+	}
+	return 0;
+}
+
+int test_weighted_dir_graph(int argc, char *argv[]){
+	/*cout << "Dijkstra's algorithm for shortest path:" << endl;
+	test_shortest_path("/backup/documents/books/algos4/algs4.cs.princeton.edu/44sp/tinyEWD.txt", 1);
+	cout << "BellmanFord's algorithm for shortest path:" << endl;
+	test_shortest_path("/backup/documents/books/algos4/algs4.cs.princeton.edu/44sp/tinyEWD.txt", 3);
+	cout << "\nUsing topological order to calculate shortest path for DAG:" << endl;
+	test_shortest_path("/backup/documents/books/algos4/algs4.cs.princeton.edu/44sp/tinyEWDAG.txt", 2);*/
+	cout << "Dijkstra's algorithm for shortest path:" << endl;
+	test_shortest_path("F:\\documents\\books\\algos4\\algs4.cs.princeton.edu\\44sp\\tinyEWD.txt", 1);
+	cout << "BellmanFord's algorithm for shortest path:" << endl;
+	test_shortest_path("F:\\documents\\books\\algos4\\algs4.cs.princeton.edu\\44sp\\tinyEWD.txt", 3);
+	cout << "BellmanFord's algorithm for shortest path of graph with negative weights:" << endl;
+	test_shortest_path("F:\\documents\\books\\algos4\\algs4.cs.princeton.edu\\44sp\\tinyEWDn.txt", 3);
+	cout << "\nUsing topological order to calculate shortest path for DAG:" << endl;
+	test_shortest_path("F:\\documents\\books\\algos4\\algs4.cs.princeton.edu\\44sp\\tinyEWDAG.txt", 2);
+
+	using namespace my_lib;
+	WeightedDirAdjList wdal(0, -DBL_MAX);
+	TxtFileWeightedGraphReader reader("F:\\documents\\books\\algos4\\algs4.cs.princeton.edu\\44sp\\tinyEWDnc.txt");
+	reader >> wdal;
+
+	BellmanFordShortestPath bellmanFord(wdal, 0);
+	if (bellmanFord.hasNegativeCycle()){
+		cout << "negative cycle :";
+		auto& tmp = bellmanFord.negativeCycle();
+		for (auto v : bellmanFord.negativeCycle()) cout << v << " ";
+		cout << endl;
+	}
+	return 0;
+}
+
 int test_weighted_undir_graph(int argc, char *argv[]){
 	using namespace my_lib;
-	{
-		WeightedDirAdjList wdal;
-		//randomWeightedDirGraph((unsigned int)100, 0.3, wdal, rand, WeightGenerator(1000));
-		//cout << wdal;
-		const char *fileName = "F:\\documents\\books\\algos4\\algs4.cs.princeton.edu\\44sp\\tinyEWD.txt";
-		TxtFileWeightedGraphReader reader(fileName);
-		reader >> wdal;
-		DijkstraShortestPath sp(wdal, 0);
-		for (unsigned int i = 0; i < wdal.getVertexCount(); ++i){
-			std::vector<unsigned int> path;
-			if (sp.getPath(i, &path)){
-				for (auto v : path)
-					cout << v << " ";
-				cout << endl;
-			}else{
-				cout << "Cannot reach " << i << " from 0" << endl;
-			}
-		}
-		cin.get();
-	}
 	WeightedUndirAdjList wual;
 	bool isRandom = true;
 	if(isRandom){
@@ -437,6 +477,6 @@ int test_regex(int argc, char *argv[]){
 }
 
 int main(int argc, char *argv[]){
-	return test_weighted_undir_graph(argc, argv);
+	return test_weighted_dir_graph(argc, argv);
 	//return test_math(argc, argv);
 }
