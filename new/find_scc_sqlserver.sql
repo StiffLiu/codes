@@ -2,6 +2,9 @@ GO
 DROP PROCEDURE find_scc;
 
 GO
+-- Find all the edges in strongly connected components.
+-- using Tarjan's algorithm.
+
 CREATE PROCEDURE find_scc
 AS
 BEGIN
@@ -33,8 +36,8 @@ BEGIN
    DELETE FROM #temp_vertex_stack;
    DELETE FROM #temp_scc;
    DELETE FROM #temp_call_stack;
-   -- change SELECT distinct src, dest FROM src_graph where src != dest
-   -- into your SELECT distcint child_id, parent_id FROM YOUR_TABLE WHERE child_id != parent_id
+   -- change SELECT distinct src, dest FROM src_graph
+   -- into your SELECT distcint child_id, parent_id FROM YOUR_TABLE WHERE
    INSERT #temp_graph(src, dest) SELECT DISTINCT src, dest FROM src_graph;
    -- backup self-loops.
    INSERT INTO #temp_graph_backup (src, dest) SELECT src, dest FROM #temp_graph WHERE src = dest;
