@@ -18,7 +18,6 @@ BEGIN
    
    DECLARE var_helper INT DEFAULT 0;
    DECLARE var_helper1 INT DEFAULT 1;
-   DECLARE var_loop_count INT DEFAULT 0;
    
    -- CREATE TEMPORARY TABLE temp_graph (src int not null, dest int not null, primary key (src, dest));
    -- CREATE TEMPORARY TABLE temp_vertex_stack (idx int primary key, vertex int not null));
@@ -31,11 +30,11 @@ BEGIN
    DELETE FROM temp_vertex_stack;
    DELETE FROM temp_scc;
    DELETE FROM temp_call_stack;
-   INSERT temp_graph(src, dest) SELECT src, dest FROM src_graph;
+   INSERT temp_graph(src, dest) SELECT distinct src, dest FROM src_graph where src != dest;
    
    -- try to remove more edges to avoid unnecessary checks.
    SELECT COUNT(*) INTO var_helper1 FROM temp_graph;
-   WHILE var_helper != var_helper1 AND var_loop_count < 50 DO
+   WHILE var_helper != var_helper1 DO
 		-- SELECT * FROM temp_graph;
 		SET var_helper = var_helper1;
 		DELETE FROM temp_link;
@@ -43,12 +42,11 @@ BEGIN
 		-- ignore vertices whose in-degree or out-degree is zero, which cannot appear in any loop.
 		DELETE FROM temp_graph WHERE (src NOT IN (SELECT DISTINCT vertex FROM temp_link) ) OR (dest NOT IN (SELECT DISTINCT vertex FROM temp_link) ) ;
 		SELECT COUNT(*) INTO var_helper1 FROM temp_graph;
-		SET var_loop_count = var_loop_count + 1
    END WHILE;
    
    -- make a back up of temp_graph here for efficiently recover the edges in cycles.
    
-   DELETE from temp_graph where src == dest;
+   DELETE from temp_graph where src = dest;
    
    SELECT src INTO var_vertex FROM temp_graph LIMIT 0,1;
    WHILE var_vertex IS NOT NULL DO
