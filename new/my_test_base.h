@@ -88,6 +88,7 @@ namespace my_lib{
 		protected:
 			std::vector<unsigned int> edges;
 			std::vector<double> points;
+			std::vector<double> edgeColors;
 			double pointSize = 3;
 			virtual const char *getString(unsigned int index) const{
 				return nullptr; 
@@ -170,14 +171,16 @@ namespace my_lib{
 	};
 
 	class UndirGraphPlot : public GraphPlot {
+	protected:
+		std::unordered_map<unsigned int, unsigned int> vertexToPoint;
 	public:
 		template<class Graph, class CoordinateTraits, class Stream>
 		void init(const Graph& graph, Stream& error, const CoordinateTraits& traits){
 			pointSize = 6;
 			points.clear();
 			edges.clear();
-			std::unordered_map<unsigned int, unsigned int> vertexToPoint;
-			for(auto& vertex : *graph.getCoordinates()){
+			vertexToPoint.clear();
+			for(auto& vertex : graph.getCoordinates()){
 				vertexToPoint[vertex.first] = points.size() / 2;
 				points.push_back(traits.x(vertex.second));
 				points.push_back(traits.y(vertex.second));

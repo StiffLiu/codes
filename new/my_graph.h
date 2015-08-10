@@ -113,10 +113,6 @@ protected:
 		vertexCount += count;
 	}
 
-	Edges getEdges() {
-		return edges;
-	}
-
 	Edges edges;
 	unsigned int vertexCount;
 };
@@ -137,6 +133,11 @@ public:
 		Super::addEdgeNoCheck(j, i);
 	}
 
+	template<class Edge>
+	void addEdge(const Edge& edge){
+		addEdge(edge.getV1(), edge.getV2());
+	}
+
 	using Super::degree;
 	using Super::adj;
 	using Super::extend;
@@ -151,6 +152,11 @@ public:
 	using Super::isAdj;
 	using Super::addEdge;
 	using Super::extend;
+
+	template<class Edge>
+	void addEdge(const Edge& edge){
+		addEdge(edge.getV1(), edge.getV2());
+	}
 
 	unsigned int outDegree(unsigned int i) const {
 		return Super::degree(i);
@@ -193,6 +199,11 @@ public:
 	void addEdge(unsigned int i, unsigned int j){
 		Super::addEdge(i, j);
 		reverse.addEdge(j, i);
+	}
+
+	template<class Edge>
+	void addEdge(const Edge& edge){
+		addEdge(edge.getV1(), edge.getV2());
 	}
 	
 	void extend(unsigned int count){
@@ -678,7 +689,7 @@ public:
 };
 
 template<class Symbol, class UnderlyingGraph>
-class SymbolAdjListT{
+class SymbolAdjListBaseT{
 protected:
 	typedef std::vector<Symbol> SymbolArray;
 	struct Key{
@@ -754,9 +765,8 @@ protected:
 	SymbolMap symbolMap;
 	UnderlyingGraph underlyingGraph;
 public:
-	SymbolAdjListT() :symbolMap(symbolArray, HashComparator(&symbolArray)){
-		Symbol symbol;
-		symbolMap[symbol];
+	SymbolAdjListBaseT(const UnderlyingGraph& underlyingGraph = UnderlyingGraph())
+		:symbolMap(symbolArray, HashComparator(&symbolArray)), underlyingGraph(underlyingGraph){
 	}
 	unsigned int getVertexCount() const {
 		return underlyingGraph.getVertexCount();
@@ -783,20 +793,6 @@ public:
 		return false;
 	}
 
-	void addEdge(const Symbol& s1, const Symbol& s2) throw(std::invalid_argument){
-		if (s1 == s2){
-			std::stringstream os;
-			os << "self loop for vertex " << s1 << " , " << s2 << " not allowed, line " << __LINE__ << " file " << __FILE__;
-			throw std::invalid_argument(os.str());
-		}
-		auto index1 = symbolMap[s1];
-		auto index2 = symbolMap[s2];
-		assert(symbolArray.size() >= underlyingGraph.getVertexCount());
-		assert(index1.isIndex && index2.isIndex);
-		underlyingGraph.extend(symbolArray.size() - underlyingGraph.getVertexCount());
-		return underlyingGraph.addEdge(index1.key.index, index2.key.index);
-	}
-
 	const SymbolArray& symbols() const{
 		return symbolArray;
 	}
@@ -808,47 +804,84 @@ public:
 		assert(index->isIndex);
 		return index->key.index;
 	}
+
+	const UnderlyingGraph& getUnderlyingGraph() const {
+		return underlyingGraph;
+	}
+protected:
+	UnderlyingGraph& getUnderlyingGraph() {
+		return underlyingGraph;
+	}
 };
 template<class Symbol, class UnderlyingGraph>
-class UndirSymbolAdjListT : public SymbolAdjListT<Symbol, UnderlyingGraph>{
-	typedef SymbolAdjListT<Symbol, UnderlyingGraph> Super;
+class SymbolAdjListT : public SymbolAdjListBaseT<Symbol, UnderlyingGraph>{
+	typedef SymbolAdjListBaseT<Symbol, UnderlyingGraph> Super;
+public:	
+	void addEdge(const Symbol& s1, const Symbol& s2) throw(std::invalid_argument){
+		if (s1 == s2){
+			std::stringstream os;
+			os << "self loop for vertex " << s1 << " , " << s2 << " not allowed, line " << __LINE__ << " file " << __FILE__;
+			throw std::invalid_argument(os.str());
+		}
+		auto index1 = Super::symbolMap[s1];
+		auto index2 = Super::symbolMap[s2];
+		assert(Super::symbolArray.size() >= Super::getUnderlyingGraph().getVertexCount());
+		assert(index1.isIndex && index2.isIndex);
+		Super::getUnderlyingGraph().extend(Super::symbolArray.size() - Super::getUnderlyingGraph().getVertexCount());
+		return Super::getUnderlyingGraph().addEdge(index1.key.index, index2.key.index);
+	}
+};
+template<class Base>
+class UndirSymbolAdjListBaseT : public Base{
 public:
+	using Base::getUnderlyingGraph;
 	unsigned int degree(unsigned int i) const {
-		return Super::underlyingGraph.degree(i);
+		return getUnderlyingGraph().degree(i);
 	}
 
-	const typename UnderlyingGraph::Vertices* adj(unsigned int i) const {
-		return Super::underlyingGraph.adj(i);
+	auto adj(unsigned int i) const ->decltype(getUnderlyingGraph().adj(i)) {
+		return getUnderlyingGraph().adj(i);
 	}
 };
-template<class Symbol, class UnderlyingGraph>
-class DirSymbolGraphT : public SymbolAdjListT<Symbol, UnderlyingGraph>{
-	typedef SymbolAdjListT<Symbol, UnderlyingGraph> Super;
+
+template<class Base>
+class DirSymbolAdjListBaseT : public Base{
 public:
+	using Base::getUnderlyingGraph;
 	unsigned int outDegree(unsigned int i) const {
-		return Super::underlyingGraph.degree(i);
+		return getUnderlyingGraph().degree(i);
 	}
 
-	const typename UnderlyingGraph::Vertices* outAdj(unsigned int i) const {
-		return Super::underlyingGraph.adj(i);
+	auto outAdj(unsigned int i) const ->decltype(getUnderlyingGraph().adj(i)) {
+		return getUnderlyingGraph().adj(i);
 	}
 };
-template<class Symbol, class UnderlyingGraph>
-class DblDirSymbolAdjListT : public DirSymbolGraphT<Symbol, UnderlyingGraph>{
-	typedef SymbolAdjListT<Symbol, UnderlyingGraph> Super;
+
+template<class Super>
+class DblDirSymbolAdjListBaseT : public Super{
 public:
+	using Super::getUnderlyingGraph;
 	unsigned int inDegree(unsigned int i) const {
-		return Super::underlyingGraph.inDegree(i);
+		return getUnderlyingGraph().inDegree(i);
 	}
 
-	const typename UnderlyingGraph::Vertices* inAdj(unsigned int i) const {
-		return Super::underlyingGraph.inAdj(i);
+	auto inAdj(unsigned int i) const ->decltype(getUnderlyingGraph().inAdj(i)) {
+		return getUnderlyingGraph().inAdj(i);
 	}
 };
+
+template<class Symbol, class UnderlyingGraph>
+using UndirSymbolAdjListT = UndirSymbolAdjListBaseT < SymbolAdjListT<Symbol, UnderlyingGraph> >;
 template<class Symbol>
 using UndirSymbolAdjList = UndirSymbolAdjListT<Symbol, UndirAdjList>;
+
+template<class Symbol, class UnderlyingGraph>
+using DirSymbolAdjListT = DirSymbolAdjListBaseT < SymbolAdjListT<Symbol, UnderlyingGraph> >;
 template<class Symbol>
-using DirSymbolGraph = DirSymbolGraphT<Symbol, DirAdjList>;
+using DirSymbolAdjList = DirSymbolAdjListT<Symbol, DirAdjList>;
+
+template<class Symbol, class UnderlyingGraph>
+using DblDirSymbolAdjListT = DblDirSymbolAdjListBaseT <DirSymbolAdjListT<Symbol, UnderlyingGraph> >;
 template<class Symbol>
 using DblDirSymbolAdjList = DblDirSymbolAdjListT<Symbol, DblDirAdjList>;
 
@@ -1180,7 +1213,7 @@ public:
 			Dfs(const Graph& graph, Data& data, Components& components, unsigned int& nextComponent, unsigned int& index)
 				: graph(graph), data(data), nextComponent(nextComponent), components(components), index(index){
 			}
-			unsigned int operator()(unsigned int p, unsigned int v){
+			unsigned int operator()(unsigned int , unsigned int v){
 				auto link = &data.links[v];
 				auto stackIndex = data.stack.size();
 				auto vertexIndex = index;
@@ -1482,6 +1515,11 @@ public:
 		weightedEdges.insert({ i, j, weight });
 	}
 
+	template<class Edge>
+	void addEdge(const Edge& edge){
+		addEdge(edge.getV1(), edge.getV2(), edge.getWeight());
+	}
+
 	void reset(unsigned int vertexCount){
 		Super::reset(vertexCount);
 		weightedEdges.clear();
@@ -1540,6 +1578,41 @@ public:
 };
 
 using WeightedDirAdjList = WeightedDirAdjListT<>;
+template<class Symbol, class UnderlyingGraph>
+class WeightedSymbolAdjListT : public SymbolAdjListBaseT<Symbol, UnderlyingGraph>{
+	typedef SymbolAdjListBaseT<Symbol, UnderlyingGraph> Super;
+public:
+	template<class Weight>
+	void addEdge(const Symbol& s1, const Symbol& s2, const Weight& weight) throw(std::invalid_argument){
+		if (s1 == s2){
+			std::stringstream os;
+			os << "self loop for vertex " << s1 << " , " << s2 << " not allowed, line " << __LINE__ << " file " << __FILE__;
+			throw std::invalid_argument(os.str());
+		}
+		auto index1 = Super::symbolMap[s1];
+		auto index2 = Super::symbolMap[s2];
+		assert(Super::symbolArray.size() >= Super::getUnderlyingGraph().getVertexCount());
+		assert(index1.isIndex && index2.isIndex);
+		Super::getUnderlyingGraph().extend(Super::symbolArray.size() - Super::getUnderlyingGraph().getVertexCount());
+		return Super::getUnderlyingGraph().addEdge(index1.key.index, index2.key.index, weight);
+	}
+};
+
+template<class Symbol, class UnderlyingGraph>
+using WeightedUndirSymbolAdjListT = UndirSymbolAdjListBaseT < WeightedSymbolAdjListT<Symbol, UnderlyingGraph> >;
+template<class Symbol>
+using WeightedUndirSymbolAdjList = WeightedUndirSymbolAdjListT<Symbol, WeightedUndirAdjList>;
+
+template<class Symbol, class UnderlyingGraph>
+using WeightedDirSymbolAdjListT = DirSymbolAdjListBaseT < WeightedSymbolAdjListT<Symbol, UnderlyingGraph> >;
+template<class Symbol>
+using WeightedDirSymbolAdjList = WeightedDirSymbolAdjListT<Symbol, WeightedDirAdjList>;
+
+/*
+template<class Symbol, class UnderlyingGraph>
+using WeightedDblDirSymbolAdjListT = DblDirSymbolAdjListBaseT <DirSymbolAdjListT<Symbol, UnderlyingGraph> >;
+template<class Symbol>
+using WeightedDblDirSymbolAdjList = WeightedDblDirSymbolAdjListT<Symbol, WeightedDblDirAdjList>;*/
 
 struct ReadOneWeightedEdge{
 	template<class Stream, class Graph>
@@ -1771,7 +1844,6 @@ struct IndexedMinWeightedEdgeHeap{
 			if (d != 2){
 				size_t start = d * index + 1;
 				size_t end = std::min(s, start + d);
-				size_t smallest = index;
 				for (size_t i = start; i < end; ++i){
 					auto childVertex = maps.find(vertices[i]);
 					assert(childVertex != maps.end());
@@ -1852,7 +1924,7 @@ public:
  * Dijkstra's algorithm for computing shortest path of a weighted directed graph with non-negative weights. 
  * When edge's have negative weights, the behaviour of this algorithm is undefined.
  * Edge weights must be non-negative
- * Time complexity: O(E*log(V))
+ * Time complexity: O(E + V*log(V))
  * 		    With  E is the number of edge, V is the number of vertices.
  * */
 class DijkstraShortestPath : public ShortestPathBase{
@@ -1875,12 +1947,20 @@ public:
 		IndexedMinWeightedEdgeHeap<ShortestDist> pq;
 		pq.push(src, ShortestDist(src, 0));
 
+		//the number of elements in the priority queue is at most V
+		//and with one element poped from the priority queue each loop
+		//so the number of loops is at most V
 		while (!pq.empty()){
+			
+			//pop from the priority queue takes O(log(V)) time
 			auto shortestDist = pq.popWithVertex();
 			auto adj = graph.outAdj(shortestDist.first);
 			sp[shortestDist.first] = shortestDist.second.p;
+
 			if(adj)
 				for(auto v : *adj)
+					//every edge will be visited at most once in this inner loop
+					//so the overall total cost of this inner loop is O(E)
 					if(sp.find(v) == sp.end()){
 						auto weightedEdge = graph.getWeightedEdge(shortestDist.first, v);
 						assert(weightedEdge != nullptr);
@@ -1964,10 +2044,13 @@ public:
 		unsigned int count = 0;
 		while(!vertices.empty()){
 			unsigned int src = vertices.top();
-			auto adj = graph.outAdj(src);
-
+			auto parent = sp.find(src);
 			vertices.pop();
 			inQueue.erase(src);
+			if (parent != sp.end() && inQueue.find(parent->second) != inQueue.end())
+				continue;
+			auto adj = graph.outAdj(src);
+
 
 			if(adj)
 				for(auto v : *adj){
@@ -2064,8 +2147,8 @@ public:
 		return &pos->second;
 	}
 
-	auto getCoordinates() const -> decltype(&coordinates){
-		return &coordinates;
+	auto getCoordinates() const -> decltype((coordinates)){
+		return coordinates;
 	}
 
 	void setCoordinate(unsigned int v, const Coordinate& coordinate) {

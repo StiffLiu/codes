@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <ctime>
+#include <cfloat>
 
 using namespace std;
 void outputPath(const vector<unsigned int>& path){
@@ -199,10 +200,11 @@ int test_random_undir_graph(int argc, char *argv[]){
 
 template<class SCC>
 void outputSCC(const SCC& scc){
-	for(auto& d : scc){
+	for(auto& d : scc)
+	if(d.second.size() > 1) {
 		std::cout << d.first << "\t: ";
 		for(auto& v : d.second)
-			std::cout << v << '\t';
+			std::cout << v << ',';
 		std::cout << std::endl;
 	}
 }
@@ -217,28 +219,66 @@ bool getCmd(std::string& cmd){
 		cmd = newCmd;
 	return true;
 }
+void test_db_algo(my_lib::DirAdjList& dal){
+	{
+		std::ofstream os("E:\\test.sql");
+		os << "DELIMITER $$" << std::endl;
+		os << "use algo $$" << std::endl;
+		os << "delete from src_graph$$" << std::endl;
+		for (const auto& one : dal.getEdges()){
+			for (auto v : one.second)
+				os << "insert into src_graph(src, dest) values(" << one.first << "," << v << ") $$" << std::endl;
+		}
+		os << "call find_scc $$" << std::endl;
+		os << "select component, group_concat(vertex order by vertex) as vertices from temp_scc group by component $$" << std::endl;
+	}
+	std::system("\"E:\\windows\\programs\\mysql-cluster-gpl-7.4.6-winx64\\bin\\mysql.exe\" -uroot < E:\\test.sql");
+}
+my_lib::DirAdjList init_the_graph(){
+	using namespace my_lib;
+	std::fstream is("E:\\source\\github\\codes\\C_SLS_TTY_PRNT.csv");
+	if (!is){
+		std::cerr << "Failed to open file..." << std::endl;
+		return DirAdjList(1);
+	}
+	unsigned int v1, v2;
+	char ch;
+	unsigned int max_v = 0;
+	std::set<std::pair<unsigned int, unsigned int> > edges;
+	while (is >>  v1 >> v2){
+		if (v1 == v2)
+			continue;
+		max_v = std::max(max_v, (unsigned int)v1);
+		max_v = std::max(max_v, (unsigned int)v2);
+		edges.insert({ (unsigned int)v1, (unsigned int)v2 });
+	}
+	DirAdjList dal(max_v + 1);
+	for (const auto& edge : edges)
+		dal.addEdge(edge.first, edge.second);
+	return dal;
+}
 int test_random_dir_graph(int agrc, char *argv[]){
 	using namespace my_lib;
-	DirAdjList dal(10);
+	DirAdjList dal(30);
 	srand(time(0));
 
-	unsigned int vertexCount = 15;
-	double ratio = 0.2;
-	std::string cmd = "dag";
+	unsigned int vertexCount = 1000;
+	double ratio = 0.001;
+	std::string cmd = "dg";
 	while(true){
-		if(cmd != "dag")
-			randomDirGraph(vertexCount, ratio, dal, rand);
+		if (cmd != "dag")
+			 randomDirGraph(vertexCount, ratio, dal, rand);
 		else
 			randomDAG(vertexCount, ratio, dal, rand);
-		//readAdjList(dal, "issue1.txt");
-		cout << dal;
-
+		//readAdjList(dal, "F:\\documents\\books\\Algorithms 4th Edition\\algs4-data\\tinyDG.txt");
+		dal = init_the_graph();
+		//cout << dal;
 		StrongConnectedComponent scc(dal);
 		//typedef std::unordered_map<unsigned int, std::unordered_set<unsigned int> > SCC;
 		typedef std::map<unsigned int, std::set<unsigned int> > SCC;
 		SCC cc;
 		scc.getSCC(cc);
-
+		//test_db_algo(dal);
 		std::cout << "strong connected components : \n";
 		std::cout << "===============" << std::endl;
 		outputSCC(cc);
@@ -374,6 +414,7 @@ int test_weighted_dir_graph(int argc, char *argv[]){
 		for (auto v : bellmanFord.negativeCycle()) cout << v << " ";
 		cout << endl;
 	}
+	cin.get();
 	return 0;
 }
 
@@ -477,6 +518,7 @@ int test_regex(int argc, char *argv[]){
 }
 
 int main(int argc, char *argv[]){
-	return test_weighted_dir_graph(argc, argv);
+	//return test_weighted_dir_graph(argc, argv);
 	//return test_math(argc, argv);
+	return test_random_dir_graph(argc, argv);
 }

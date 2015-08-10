@@ -289,8 +289,19 @@ void GraphPlot::show(){
 		drawPoints(&points[0], points.size() / 2, color); 
 
 		std::swap(color[0], color[1]);
-		if(!edges.empty())
-			drawEdges(&points[0], &edges[0], edges.size(), color);
+		if(!edges.empty()){
+			if(edgeColors.empty())
+				drawEdges(&points[0], &edges[0], edges.size(), color);
+			else{
+				glBegin(GL_LINES);
+				for(size_t i = 0;i < edges.size();i += 2){
+					glColor3dv(&edgeColors[i / 2 * 3]);
+					glVertex2dv(&points[2 * edges[i]]);
+					glVertex2dv(&points[2 * edges[i + 1]]);
+				}
+				glEnd();
+			}
+		}
 		unsigned int numString = points.size() / 2;
 		for(unsigned int i = 0;i < numString;++ i){
 			unsigned int index = 2 * i;

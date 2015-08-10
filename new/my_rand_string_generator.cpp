@@ -1,6 +1,7 @@
 #include "my_rand_string_generator.h"
 #include <cctype>
 #include <random>
+#include <cassert>
 
 namespace{
 struct CharacterClasses{
@@ -30,7 +31,8 @@ struct CharacterClasses{
 	static void generate(unsigned int minLen, unsigned int maxLen, 
 			const char *chars, unsigned int count, std::string& str){
 		std::random_device rd;
-		std::uniform_int_distribution<unsigned int> indexGenerator(0, count); 
+		assert(count > 0);
+		std::uniform_int_distribution<unsigned int> indexGenerator(0, count - 1); 
 		std::uniform_int_distribution<unsigned int> lengthGenerator(minLen, maxLen);
 		auto len = lengthGenerator(rd);
 		decltype(len) i = str.size();
@@ -47,13 +49,13 @@ void RandStringGenerator::randStringAlpha(std::string& str){
 		instance.alphas.size(), str);
 }
 void RandStringGenerator::randStringInt(std::string& str){
-	CharacterClasses::generate(minLen, maxLen, instance.hexDigits.c_str(),
-		instance.hexDigits.size(), str);
+	CharacterClasses::generate(minLen, maxLen, instance.digits.c_str(),
+		instance.digits.size(), str);
 }
 
 void RandStringGenerator::randStringHex(std::string& str){
-	CharacterClasses::generate(minLen, maxLen, instance.digits.c_str(),
-		instance.digits.size(), str);
+	CharacterClasses::generate(minLen, maxLen, instance.hexDigits.c_str(),
+		instance.hexDigits.size(), str);
 }
 
 void RandStringGenerator::randStringBin(std::string& str){
