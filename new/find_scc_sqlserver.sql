@@ -24,13 +24,13 @@ BEGIN
    DECLARE @var_helper INT = 0;
    DECLARE @var_helper1 INT = 1;
    
-   CREATE TABLE #temp_graph (src int not null, dest int not null, primary key (src, dest));
-   CREATE TABLE #temp_graph_backup (src int not null, dest int not null, primary key (src, dest));
-   CREATE TABLE #temp_vertex_stack (idx int primary key, vertex int not null));
-   CREATE TABLE #temp_link (vertex int primary key, num int, in_vertex_stack int));
-   CREATE TABLE #temp_call_stack (vertex int not null, adj int not null, idx int primary key, vertex_index int  not null));
-   CREATE TABLE #temp_scc (vertex int primary key, component int not null));
-   -- CREATE TABLE src_graph (src int not null, dest int not null, primary key(src, dest)));
+   CREATE TABLE #temp_graph (src INT NOT NULL, dest INT NOT NULL, PRIMARY KEY (src, dest));
+   CREATE TABLE #temp_graph_backup (src INT NOT NULL, dest INT NOT NULL, PRIMARY KEY (src, dest));
+   CREATE TABLE #temp_vertex_stack (idx INT PRIMARY KEY, vertex INT NOT NULL));
+   CREATE TABLE #temp_link (vertex INT PRIMARY KEY, num INT, in_vertex_stack INT));
+   CREATE TABLE #temp_call_stack (vertex INT NOT NULL, adj INT NOT NULL, idx int PRIMARY KEY, vertex_index INT NOT NULL));
+   CREATE TABLE #temp_scc (vertex INT PRIMARY KEY, component INT NOT NULL));
+   -- CREATE TABLE src_graph (src INT NOT NULL, dest INT NOT NULL, PRIMARY KEY(src, dest)));
 
    DELETE FROM #temp_graph;
    DELETE FROM #temp_vertex_stack;
@@ -101,7 +101,7 @@ BEGIN
 				BEGIN
 					-- if this adjacency vertex hasn't already visited
 					-- save current to call stack
-					INSERT INTO #temp_call_stack(idx, vertex, adj, vertex_index) VALUES(@var_call_stack_index, @var_vertex, @var_adj, @var_vertex_index);
+					INSERT #temp_call_stack(idx, vertex, adj, vertex_index) VALUES(@var_call_stack_index, @var_vertex, @var_adj, @var_vertex_index);
 					SET @var_call_stack_index = @var_call_stack_index + 1;
 					SET @var_vertex = @var_adj;
 					SET @var_adj = NULL;
@@ -121,7 +121,7 @@ BEGIN
 				
 			-- check if the lowest link of the vertex is the same as that of it's 
 			-- vertex_index, if yes a connected component has been found.
-			SELECT INTO @var_helper = COUNT(*) FROM #temp_link WHERE vertex = @var_vertex AND num = @var_vertex_index;
+			SELECT @var_helper = COUNT(*) FROM #temp_link WHERE vertex = @var_vertex AND num = @var_vertex_index;
 			IF (@var_helper > 0)
 			BEGIN
 				-- SELECT "Find one component", @var_vertex_index;
