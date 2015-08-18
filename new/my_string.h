@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cassert>
 #include <unordered_map>
+#include <type_traits>
 
 namespace my_lib{
 
@@ -688,8 +689,9 @@ unsigned int bruteForceSearch(const Str& src, const Str& pattern){
 template<class Str>
 unsigned int kmpSearch(const Str& src, unsigned int n,
 	const Str& pattern, unsigned int m){
+	typedef typename std::remove_cv<typename std::remove_reference<decltype(src[0])>::type >::type Char;
 	std::unordered_map<unsigned int, 
-		std::unordered_map<char, unsigned int> > dfa;
+		std::unordered_map<Char, unsigned int> > dfa;
 	buildDFA(pattern, m, dfa);
 
 	// For empty string, always match.
@@ -718,7 +720,8 @@ unsigned int boyerMooreSearch(const Str& src, unsigned int n,
 	if (m == 0) return 0;
 	if (n < m) return n;
 
-	std::unordered_map<char, unsigned int> largestIndices;
+	typedef typename std::remove_cv<typename std::remove_reference<decltype(src[0])>::type >::type Char;
+	std::unordered_map<Char, unsigned int> largestIndices;
 	for(unsigned int i = 0;i < m;++ i)
 		largestIndices[pattern[i]] = i;
 	for(unsigned int i = 0;i + m <= n;){
