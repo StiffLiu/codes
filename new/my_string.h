@@ -387,7 +387,7 @@ public:
 			if(node->node[index].hasValue)	longestPos = i;
 			node = &node->node[index];
 		}
-		if(longestPos == -1) return false;
+		if(longestPos == static_cast<unsigned int>(-1)) return false;
 		for(i = 0;i < longestPos;++ i) key.push_back(KeyTraits::to(KeyTraits::index(s, i)));
 		return true;
 	}
@@ -647,7 +647,7 @@ public:
 				}
 			}
 		}
-		if(index == -1)	return false;
+		if(index == static_cast<unsigned int>(-1)) return false;
 		key = Prefix();
 		for(unsigned int i = 0;i < index;++ i) key.push_back(s[i]);
 		return true;
@@ -655,8 +655,8 @@ public:
 };
 
 template<class Str, class DFA>
-void buildDFA(const Str& str, unsigned int n, DFA& dfa){
-	if(n == 0) return;
+unsigned int buildDFA(const Str& str, unsigned int n, DFA& dfa){
+	if(n == 0) return static_cast<unsigned int>(-1);
 
 	unsigned int restartState = 0;
 	dfa[0][str[0]] = 1;
@@ -665,6 +665,7 @@ void buildDFA(const Str& str, unsigned int n, DFA& dfa){
 		dfa[i][str[i]] = i + 1;
 		restartState = dfa[restartState][str[i]];
 	}
+	return restartState;
 }
 
 template<class Str>
@@ -673,17 +674,41 @@ unsigned int bruteForceSearch(const Str& src, unsigned int n,
 	for (unsigned int i = 0;i + m <= n;++ i){
 		unsigned int j = 0;
 		for (;j < m;++ j)
-			if (pattern[j] != src[i + j])
-				break;
-		if (j == m)
-			return i;
+			if (pattern[j] != src[i + j]) break;
+		if (j == m) return i;
 	}
 	return n;
+}
+
+template<class Str, class Algo, class All>
+void searchAllBase(const Str& src, unsigned int n, const Str& pattern, unsigned int m,
+  All& all, Algo algo){
+	unsigned int index = 0;
+	unsigned int count = n;
+	while((index = algo(src + (n - count), count, pattern, m)) != count){
+		all.insert(n + index - count);
+		count = count - index;
+		if (count <= 0) break;
+		--count;
+	}
 }
 
 template<class Str>
 unsigned int bruteForceSearch(const Str& src, const Str& pattern){
 	return bruteForceSearch(src, src.size(), pattern, pattern.size());
+}
+
+template<class Str, class All>
+void bruteForceSearch(const Str& src, unsigned int n, 
+  const Str& pattern, unsigned int m, All& all){
+	unsigned int (*func)(const Str&, unsigned int, const Str&, unsigned int) = bruteForceSearch;
+	searchAllBase(src, n, pattern, m, all, func);
+}
+
+template<class Str, class All>
+void bruteForceSearch(const Str& src, const Str& pattern, All& all){
+	if (src.size() == 0 || pattern.size() == 0) return;
+	return bruteForceSearch(&src[0], src.size(), &pattern[0], pattern.size(), all);
 }
 
 template<class Str>
@@ -697,7 +722,7 @@ unsigned int kmpSearch(const Str& src, unsigned int n,
 	// For empty string, always match.
 	if (m == 0) return 0;
 	unsigned int j = 0;
-	for (unsigned int i = 0;i < n;++ i){
+	for (unsigned int i = 0;i < n && n + j >= m + i;++ i){
 		auto pos = dfa.find(j);
 		if (pos == dfa.end()) j = 0;
 		else{
@@ -709,9 +734,40 @@ unsigned int kmpSearch(const Str& src, unsigned int n,
 	return n;
 }
 
+template<class Str, class All>
+void kmpSearch(const Str& src, unsigned int n,
+	const Str& pattern, unsigned int m, All& all){
+	typedef typename std::remove_cv<typename std::remove_reference<decltype(src[0])>::type >::type Char;
+	std::unordered_map<unsigned int, 
+		std::unordered_map<Char, unsigned int> > dfa;
+	unsigned int restartState = buildDFA(pattern, m, dfa);
+
+	// For empty string, always match.
+	if (m == 0) return;
+	unsigned int j = 0;
+	for (unsigned int i = 0;i < n && n + j >= m + i;++ i){
+		auto pos = dfa.find(j);
+		if (pos == dfa.end()) j = 0;
+		else{
+			auto pos1 = pos->second.find(src[i]);
+			j = ((pos1 == pos->second.end()) ? 0 : pos1->second);
+		}
+		if (j == m){
+			all.insert(i + 1- m);
+			j = restartState;
+		}
+	}
+}
+
 template<class Str>
 unsigned int kmpSearch(const Str& src, const Str& pattern){
 	return kmpSearch(src, src.size(), pattern, pattern.size()); 
+}
+
+template<class Str, class All>
+void kmpSearch(const Str& src, const Str& pattern, All& all){
+	if (src.size() == 0 || pattern.size() == 0) return;
+	return kmpSearch(&src[0], src.size(), &pattern[0], pattern.size(), all);
 }
 
 template<class Str>
@@ -741,10 +797,23 @@ unsigned int boyerMooreSearch(const Str& src, const Str& pattern){
 	return boyerMooreSearch(src, src.size(), pattern, pattern.size()); 
 }
 
+template<class Str, class All>
+void boyerMooreSearch(const Str& src, unsigned int n, 
+  const Str& pattern, unsigned int m, All& all){
+	unsigned int (*func)(const Str&, unsigned int, const Str&, unsigned int) = boyerMooreSearch;
+	searchAllBase(src, n, pattern, m, all, func);
+}
+
+template<class Str, class All>
+void boyerMooreSearch(const Str& src, const Str& pattern, All& all){
+	if (src.size() == 0 || pattern.size() == 0) return;
+	return boyerMooreSearch(&src[0], src.size(), &pattern[0], pattern.size(), all);
+}
+
 template<class Str>
 unsigned int rabinKarpSearch(const Str& src, unsigned int n,
 	const Str& pattern, unsigned int m, 
-	unsigned int radius = 256, unsigned long long prime = 429496729uLL){
+	unsigned int radius = 256, unsigned long long prime = 429496729uLL/*Not neccessarily be a prime number*/){
 	if (m == 0) return 0;
 	if (n < m) return n;
 
@@ -761,7 +830,7 @@ unsigned int rabinKarpSearch(const Str& src, unsigned int n,
 
 
 	unsigned int index = m;
-	do{
+	while(index < n){
 		if(srcHash == patHash){
 			// probably do a real match here.
 			return index - m;
@@ -769,7 +838,7 @@ unsigned int rabinKarpSearch(const Str& src, unsigned int n,
 		srcHash = (prime - (src[index - m] * rmHash % prime) + srcHash) % prime;
 		srcHash = (srcHash * radius + src[index]) % prime;
 		++ index;
-	}while(index < n);
+	}
 
 	if(srcHash == patHash){
 			// probably do a real match here.
@@ -781,6 +850,22 @@ unsigned int rabinKarpSearch(const Str& src, unsigned int n,
 template<class Str>
 unsigned int rabinKarpSearch(const Str& src, const Str& pattern){
 	return rabinKarpSearch(src, src.size(), pattern, pattern.size()); 
+}
+
+template<class Str, class All>
+void rabinKarpSearch(const Str& src, unsigned int n, 
+  const Str& pattern, unsigned int m, All& all){
+	searchAllBase(src, n, pattern, m, all, 
+	  [](const Str& str, unsigned int n, const Str& pat, unsigned int m){
+	  	return rabinKarpSearch(str, n, pat, m);
+	  }
+	);
+}
+
+template<class Str, class All>
+void rabinKarpSearch(const Str& src, const Str& pattern, All& all){
+	if (src.size() == 0 || pattern.size() == 0) return;
+	return rabinKarpSearch(&src[0], src.size(), &pattern[0], pattern.size(), all);
 }
 }
 #endif

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <fstream>
 #include <map>
+#include <set>
 
 #define MEASURETIME(statement, desc) \
 {\
@@ -270,19 +271,33 @@ int test_substr_search(int argc, char *argv[]){
 		matchIndex = src.find(pat);
 		std::cout << "expected match index is : " << (long long)(matchIndex == std::string::npos ? -1 : matchIndex) << std::endl;
 
-
 		unsigned int result = 0;
 		std::cout << "Search \n" << pat << "\n\t in \n" << src << std::endl;
 		std::cout << "bruteForce : " << (result = bruteForceSearch(src, pat)) << std::endl;
-		assert(matchIndex == std::string::npos || matchIndex == result);
+		assert((matchIndex == std::string::npos && result == src.size()) || matchIndex == result);
 		std::cout << "kmp : " << (result = kmpSearch(src, pat)) << std::endl;
-		assert(matchIndex == std::string::npos || matchIndex == result);
+		assert((matchIndex == std::string::npos && result == src.size()) || matchIndex == result);
 		std::cout << "boyerMoore : " << (result = boyerMooreSearch(src, pat)) << std::endl;
-		assert(matchIndex == std::string::npos || matchIndex == result);
+		assert((matchIndex == std::string::npos && result == src.size()) || matchIndex == result);
 		std::cout << "rabinKarp : " << (result = rabinKarpSearch(src, pat)) << std::endl;
-		assert(matchIndex == std::string::npos || matchIndex == result);
+		assert((matchIndex == std::string::npos && result == src.size())|| matchIndex == result);
 		std::cout << "--------------------------------------------------" << std::endl;
+
 	}
+	{
+		using namespace std;
+		string src("abcabcabcabcabcab"), pat("abcab");
+		set<unsigned int> all;
+		bruteForceSearch(src, pat, all);
+		cout << "brureForce: "; for (auto index : all) cout << index << " "; cout << endl; all.clear();
+		kmpSearch(src, pat, all);
+		cout << "kmp: "; for (auto index : all) cout << index << " "; cout << endl; all.clear();
+		boyerMooreSearch(src, pat, all);
+		cout << "boyerMoore: "; for (auto index : all) cout << index << " "; cout << endl; all.clear();
+		rabinKarpSearch(src, pat, all);
+		cout << "rabinKarp: "; for (auto index : all) cout << index << " "; cout << endl; all.clear();
+	}
+
 	return 0;
 }
 

@@ -1602,9 +1602,9 @@ public:
 			cmd = "gid"[rand()%3];
 		}
 		//The symbol table used later in this loop may use less time
-		//then the hash tables used ealiear due to hardware memory cache.
-		//This may make the comparision inaccurate.
-		//So we access these tables forward and backward interchangably.
+		//then the hash tables used earlier due to hardware memory cache.
+		//This may make the comparison inaccurate.
+		//So we access these tables forward and backward interchangeably.
 		for(int i = (current % 2 == 0 ? 0 : N - 1);i < N && i >= 0;i += (current % 2 == 0 ? 1 : -1)){
 			switch(cmd){
 			case 'i':
