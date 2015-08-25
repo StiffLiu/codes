@@ -301,9 +301,30 @@ int test_substr_search(int argc, char *argv[]){
 	return 0;
 }
 
+int test_2d_search(int argc, char *argv[]){
+	const unsigned int m = 100, n = 50, h = 20, v = 30;
+	unsigned int src[m][n], pat[h][v];
+	using namespace my_lib;
+	using namespace std;
+	for(unsigned int i = 0;i < m;++ i)
+		for(unsigned int j = 0;j < n;++ j)
+			src[i][j] = rand();
+
+	unsigned rowOffset = 10, colOffset = 6;
+	for(unsigned int i = 0;i < h;++ i)
+		for(unsigned int j = 0;j < v;++ j)
+			pat[i][j] = src[i + rowOffset][j + colOffset];
+	std::pair<unsigned int, unsigned int> result;
+	result = bruteForceSearch(src, m, n, pat, h, v);
+	cout << "bruteForce: (" << result.first << "," << result.second << ")" << endl;
+	result = rabinKarpSearch(src, m, n, pat, h, v);
+	cout << "rabinKarp: (" << result.first << "," << result.second << ")" << endl;
+	return 0;
+}
+
 int main(int argc, char *argv[]){
 	for(unsigned int i = 0;i < 1;++ i){
-		test_substr_search(argc, argv);
+		test_2d_search(argc, argv);
 	}
 	return 0;
 }

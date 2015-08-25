@@ -5,6 +5,7 @@
 #include <cassert>
 #include <unordered_map>
 #include <type_traits>
+#include <memory>
 
 namespace my_lib{
 
@@ -866,6 +867,87 @@ template<class Str, class All>
 void rabinKarpSearch(const Str& src, const Str& pattern, All& all){
 	if (src.size() == 0 || pattern.size() == 0) return;
 	return rabinKarpSearch(&src[0], src.size(), &pattern[0], pattern.size(), all);
+}
+
+template<class TDArraySrc, class TDArrayPat>
+std::pair<unsigned int, unsigned int> bruteForceSearch(const TDArraySrc& src, unsigned int m, unsigned int n,
+	const TDArrayPat& pat, unsigned int h, unsigned int v){
+	if (h <= m && v <= n && m > 0 && n > 0){
+		for(unsigned int i = 0;i <= m - h;++ i)
+			for(unsigned int j = 0;j <= n - v;++ j){
+				for(unsigned int k = 0;k < h;++ k)
+					for(unsigned int s = 0;s < v;++ s)
+						if (pat[k][s] != src[i + k][j + s])
+							goto NotFound;
+				return {i, j};
+			NotFound:;
+			}
+	}
+	return {static_cast<unsigned int>(-1), static_cast<unsigned int>(-1)};
+}
+template<class TDArraySrc, class TDArrayPat>
+std::pair<unsigned int, unsigned int> rabinKarpSearch(const TDArraySrc& src, unsigned int m, unsigned int n,
+	const TDArrayPat& pat, unsigned int h, unsigned int v, unsigned int radius = 256, unsigned long long prime = 429496729uLL){
+	if (h <= m && v <= n && m > 0 && n > 0){
+		unsigned long long patHash = 0, srcHash = 0;
+		unsigned int row = m - h + 1, col = n - v + 1;
+		std::unique_ptr<unsigned long long> srcHashColsPtr(new unsigned long long[n]);//, [](unsigned long long *p){delete[] p;});
+		unsigned long long *srcHashCols = srcHashColsPtr.get();
+		const unsigned int radiusCol = radius;
+		const unsigned long long primeCol = prime;
+		unsigned long long rvHash = 1;
+		unsigned long long rhHash = 1;
+		for (unsigned int i = 0;i < v - 1;++ i){
+			rvHash = rvHash * radiusCol % primeCol;
+		}
+		for (unsigned int i = 0;i < h - 1;++ i){
+			rhHash = rhHash * radius % prime;
+		}
+		for (unsigned int i = 0;i < v;++ i){
+			unsigned long long patHashCol = 0;
+			srcHashCols[i] = 0;
+			for(unsigned int j = 0;j < h;++ j){
+				patHashCol = (patHashCol * radius + pat[j][i]) % prime;
+				srcHashCols[i] = (srcHashCols[i] * radius + src[j][i]) % prime;
+			}
+			patHash = (patHash * radiusCol + patHashCol) % primeCol;
+			srcHash = (srcHash * radiusCol + srcHashCols[i]) % primeCol;
+		}
+		unsigned int i = 0;
+		for (;i < row;++ i){
+			if(i != 0){
+				srcHash = 0;
+				for(unsigned int j = 0;j < v;++ j){
+					srcHashCols[j] = (prime - (src[i-1][j] * rhHash % prime) + srcHashCols[j]) % prime;
+					srcHashCols[j] = (srcHashCols[j] * radius + src[i + h - 1][j]) % prime;
+					srcHash = (srcHash * radiusCol + srcHashCols[j]) % primeCol;
+				}
+			}
+			if(patHash == srcHash){
+				// probably do a real match here
+				return {i, 0};
+			}
+			for(unsigned int j = v;j < n;++ j){
+				if(i == 0){
+					srcHashCols[j] = 0;
+					for(unsigned int k = 0;k < h;++ k){
+						srcHashCols[j] = (srcHashCols[j] * radius + src[k][j]) % prime;
+					}
+				}else{
+					srcHashCols[j] = (prime - (src[i-1][j] * rhHash % prime) + srcHashCols[j]) % prime;
+					srcHashCols[j] = (srcHashCols[j] * radius + src[i + h - 1][j]) % prime;
+				}
+				srcHash = (primeCol - (srcHashCols[j - v] * rvHash % primeCol) + srcHash) % primeCol;
+				srcHash = (srcHash * radiusCol + srcHashCols[j]) % primeCol;
+				if(patHash == srcHash){
+					// probably do a real match here
+					return {i, j - v + 1};
+				}
+				
+			}
+		}
+	}
+	return {static_cast<unsigned int>(-1), static_cast<unsigned int>(-1)};
 }
 }
 #endif
