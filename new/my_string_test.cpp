@@ -6,6 +6,7 @@
 #include <ctime>
 #include <algorithm>
 #include <fstream>
+#include <streambuf>
 #include <map>
 #include <set>
 
@@ -13,7 +14,7 @@
 {\
 	clock_t start = clock();\
 	statement;\
-	cout << desc << (clock() - start) << endl;\
+	std::cout << desc << (clock() - start) << std::endl;\
 }
 
 void generateStrings(std::vector<std::string>& strs){
@@ -297,7 +298,25 @@ int test_substr_search(int argc, char *argv[]){
 		rabinKarpSearch(src, pat, all);
 		cout << "rabinKarp: "; for (auto index : all) cout << index << " "; cout << endl; all.clear();
 	}
+	{
+		std::cout << std::endl << std::endl << std::endl;
+		std::string pattern = "it is a far far better thing that i do than i have ever done";
+		std::ifstream tale("F:\\documents\\books\\Algorithms 4th Edition\\algs4-data\\tale.txt");
+		//std::ifstream tale("/f/documents/books/Algorithms 4th Edition/algs4-data/tale.txt");
+		std::string src{std::istreambuf_iterator<char>(tale), std::istreambuf_iterator<char>()};
+		unsigned int (*func[])(const std::string&, const std::string&) = 
+			{bruteForceSearch, kmpSearch, boyerMooreSearch, rabinKarpSearch};
+		const char *names[] = {"bruteForce ", "kmp ", "boyerMoore ", "rabinKarp "};
+		for(unsigned int i = 0;i < sizeof(names) / sizeof (*names);++ i){
+			unsigned int index = 0;
+			MEASURETIME(index = func[i](src, pattern), names[i])
+			std::cout << names[i] << "result is : " << index << std::endl;
+		}
+	}
 
+	std::cout << "================================" << std::endl;
+	RegExpr expr("abcd.*((f(dfdf|sdf))|cdfd|)*.*e");
+	std::cout << expr.recognize("abcdcdffsdfcdfdfsdfaaae") << std::endl;
 	return 0;
 }
 
@@ -319,12 +338,15 @@ int test_2d_search(int argc, char *argv[]){
 	cout << "bruteForce: (" << result.first << "," << result.second << ")" << endl;
 	result = rabinKarpSearch(src, m, n, pat, h, v);
 	cout << "rabinKarp: (" << result.first << "," << result.second << ")" << endl;
+
 	return 0;
 }
 
 int main(int argc, char *argv[]){
-	for(unsigned int i = 0;i < 1;++ i){
+	/*for(unsigned int i = 0;i < 1;++ i){
 		test_2d_search(argc, argv);
-	}
+	}*/
+	test_substr_search(argc, argv);
+
 	return 0;
 }

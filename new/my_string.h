@@ -6,6 +6,9 @@
 #include <unordered_map>
 #include <type_traits>
 #include <memory>
+#include <vector>
+#include <set>
+#include <map>
 
 namespace my_lib{
 
@@ -949,5 +952,161 @@ std::pair<unsigned int, unsigned int> rabinKarpSearch(const TDArraySrc& src, uns
 	}
 	return {static_cast<unsigned int>(-1), static_cast<unsigned int>(-1)};
 }
+
+class RegExpr{
+	static const char Char = '\0';
+	struct State{
+		char ch = 0;
+		char type = 0;
+		unsigned int start = 0, end = 0;
+		State(char ch, char type = 0, unsigned int start = 0, unsigned int end = 0) 
+			: type(type), ch(ch), start(start), end(end){
+		}
+	};
+	std::vector<State> pattern;
+	std::vector<unsigned int> adjVertices;
+	void calcStates(std::set<unsigned int>& states){
+		std::vector<unsigned int> allStates(states.begin(), states.end());
+		for (size_t i = 0;i < allStates.size();++ i){
+			if(allStates[i] < pattern.size()){
+				const auto& state = pattern[allStates[i]];
+				for(unsigned int j = state.start;j < state.end;++ j)
+					if (states.find(adjVertices[j]) == states.end()){
+						allStates.push_back(adjVertices[j]);
+						states.insert(adjVertices[j]);
+					}
+			}
+		}
+	}
+	void printGraph(){
+		for(size_t i = 0;i < pattern.size();++ i){
+			std::cout << i << " : ";
+			for(unsigned int j = pattern[i].start;j < pattern[i].end;++ j){
+				std::cout << adjVertices[j] << ' ';
+			}
+			std::cout << std::endl;
+		}
+	}
+public:
+	RegExpr(const char* expression){
+		std::string expr("(");
+		expr += expression;
+		expr.push_back(')');
+
+		std::vector<std::pair<size_t, size_t> > ops;
+		//std::set<std::pair<size_t, size_t> > edges;
+		std::multimap<size_t, size_t> edges;
+
+		for (size_t i = 0;i < expr.size();++ i){
+			if (expr[i] == '\\'){
+				++ i;
+				if(i >= expr.size()) break;
+				pattern.push_back(State(expr[i]));
+			}else{
+				if (expr[i] == '('){
+					ops.push_back({i, pattern.size()});
+					edges.insert({pattern.size(), pattern.size() + 1});
+					pattern.push_back(State('\0', '('));
+					if (i + 1 < expr.size() && expr[i + 1] == '*'){
+						//throw;
+						++ i;
+						std::cerr << "'*' at position " << i << " will be ignored." << std::endl;
+					}
+				}else if (expr[i] == '.'){
+					if (i + 1 < expr.size() && expr[i + 1] == '*'){
+						// * will be push_back to pattern in next iteration
+						edges.insert({pattern.size(), pattern.size() + 1});
+						edges.insert({pattern.size() + 1, pattern.size()});
+					}
+					pattern.push_back(State('\0', '.'));
+				}else if (expr[i] == '*'){
+					edges.insert({pattern.size(), pattern.size() + 1});
+					pattern.push_back(State('\0', '*'));
+					if (i + 1 < expr.size() && expr[i + 1] == '*'){
+						//throw;
+						++ i;
+						std::cerr << "'*' at position " << i << " will be ignored." << std::endl;
+					}
+				}else if (expr[i] == '|'){
+					ops.push_back({i, pattern.size()});
+					pattern.push_back(State('\0', '|'));
+					if (i + 1 < expr.size() && expr[i + 1] == '*'){
+						//throw;
+						++ i;
+						std::cerr << "'*' at position " << i << " will be ignored." << std::endl;
+					}
+				}else if (expr[i] == ')'){
+					edges.insert({pattern.size(), pattern.size() + 1});
+					size_t j = ops.size() - 1;
+					for(;j != static_cast<size_t>(-1) && expr[ops[j].first] != '(';-- j);
+					if (j == static_cast<size_t>(-1)) throw;
+					for(decltype(j) k = j + 1;k < ops.size();++ k){
+						assert(expr[ops[k].first] == '|');
+						edges.insert({ops[j].second, ops[k].second + 1});
+						edges.insert({ops[k].second, pattern.size()});
+					}
+					ops.erase(ops.begin() + j, ops.end());
+
+					if (i + 1 < expr.size() && expr[i + 1] == '*'){
+						// * will be push_back to pattern in next iteration
+						edges.insert({ops[j].second, pattern.size() + 1});
+						edges.insert({pattern.size() + 1, ops[j].second});
+					}
+					pattern.push_back(State('\0', ')'));
+				}else{
+					if (i + 1 < expr.size() && expr[i + 1] == '*'){
+						// * will be push_back to pattern in next iteration
+						edges.insert({pattern.size(), pattern.size() + 1});
+						edges.insert({pattern.size() + 1, pattern.size()});
+					}
+					pattern.push_back(State(expr[i]));
+				}
+			}
+		}
+
+		if (!ops.empty()){
+		 	//throw;
+			std::cerr << "There're possiblely unmatched braces." << std::endl;
+		}
+		for(auto& kvp : edges){
+			++ pattern[kvp.first].end;
+		}
+		unsigned int count = 0;
+		for(auto& state : pattern){
+			state.start = count;
+			count += state.end;
+			state.end = state.start;
+		}
+		adjVertices.resize(count);
+		for(auto& kvp : edges){
+			auto& state = pattern[kvp.first];
+			adjVertices[state.end] = kvp.second;
+			++state.end;
+		}
+		printGraph();
+	}
+	bool recognize(const std::string& src){
+		if(pattern.empty()){
+			return true;
+		}
+		std::set<unsigned int> indices;
+		indices.insert(0);
+		calcStates(indices);
+		for (size_t i = 0;i < src.size();++ i){
+			decltype(indices) newIndices;
+			for (auto index : indices){
+				const auto& state = pattern[index];
+				if (state.type == '.' || (state.type == Char && src[i] == state.ch)){
+					newIndices.insert(index + 1);
+				}
+			}
+			if (newIndices.empty()) return false;
+			indices.swap(newIndices);
+			calcStates(indices);
+		}
+		return (indices.find(pattern.size()) != indices.end());
+	}
+};
+
 }
 #endif
