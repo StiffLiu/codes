@@ -342,11 +342,43 @@ int test_2d_search(int argc, char *argv[]){
 	return 0;
 }
 
+template<class BitArray>
+std::ostream& outputBitArray(std::ostream& os, const BitArray& bitArray, unsigned int block = 8){
+	return os;
+}
+
+int test_compress(int argc, char *argv[]){
+	using namespace my_lib;
+	std::vector<unsigned char> chars({'a', 'a', 'a', 'a', 'a', 'a'});
+	std::vector<bool> bitArray;
+	std::vector<unsigned char> runLength;
+	std::vector<bool> decompressed;
+	
+	copy(chars.begin(), chars.end(), bitArray);
+	BASplitor spr;
+	std::cout << "Before compress : " << spr << bitArray << std::endl;
+	RunLength::compress(bitArray, runLength);
+	std::cout << "Run length compress : ";
+	for(auto length : runLength) std::cout << (unsigned int)length << ' ';
+	std::cout << std::endl;
+	RunLength::decompress(runLength, decompressed);
+	std::cout << "After decompress : " << spr << decompressed << std::endl;
+
+	std::vector<bool> compressed;
+	Huffman::compress(bitArray, compressed);
+	std::cout << "Huffman compress : " << spr << compressed << std::endl;
+	decompressed.clear();
+	Huffman::decompress(compressed, decompressed);
+	std::cout << "After decompress : " << spr << decompressed << std::endl;
+
+	return 0;
+}
+
 int main(int argc, char *argv[]){
 	/*for(unsigned int i = 0;i < 1;++ i){
 		test_2d_search(argc, argv);
 	}*/
-	test_substr_search(argc, argv);
+	test_compress(argc, argv);
 
 	return 0;
 }

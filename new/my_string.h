@@ -9,6 +9,8 @@
 #include <vector>
 #include <set>
 #include <map>
+#include <exception>
+#include <queue>
 
 namespace my_lib{
 
@@ -25,7 +27,7 @@ public:
 					ItemTraits::swap(items[j], items[j - 1]);
 			return;
 		}
-		
+
 		unsigned int itemsCount[ItemTraits::radix() + 2];
 		std::memset(itemsCount, 0, sizeof(itemsCount));
 		for(unsigned int i = 0;i < n;++ i){
@@ -74,7 +76,7 @@ struct CStrTraits{
 	static void swap(Str& str1, Str& str2){
 		std::swap(str1, str2);
 	}
-	
+
 	template<class Str>
 	static unsigned int index(Str& str, unsigned int i){
 		assert(str[i] >= 0);
@@ -113,7 +115,7 @@ struct NumCStrTraits : public CStrTraits{
 	static unsigned int cutoff(){
 		return 15;
 	}
-	
+
 	template<class Str>
 	static int compare(Str str1, Str str2, unsigned int index){
 		str1 += index; str2 += index;
@@ -172,7 +174,7 @@ static void sort(Item array[], unsigned int low, unsigned int high, unsigned int
 	}
 	sort(array, gt+1, high, index);
 }
-public: 
+public:
 	static void sort(Item array[], unsigned int n){
 		sort(array, 0, n, 0);
 	}
@@ -184,7 +186,7 @@ template<class Key, class Value, class KeyTraits>
 class Trie{
 	struct Node{
 		Value value = Value();
-		Node *node = nullptr;	
+		Node *node = nullptr;
 		unsigned int size = 0;
 		bool hasValue = false;
 		unsigned int validateSize(){
@@ -217,7 +219,7 @@ class Trie{
 		}
 		void removeChild(){
 			deleet();
-			size = (hasValue ? 1 : 0); 
+			size = (hasValue ? 1 : 0);
 		}
 
 		template<class Seq, class Prefix>
@@ -239,7 +241,7 @@ class Trie{
 		}
 
 	};
-	
+
 
 	Node* getNode(const Key& key, bool exactMatch = true) const{
 		unsigned int index = 0;
@@ -307,7 +309,7 @@ public:
 			}
 		}
 		assert(root->isValid());
-		return !isReplace; 
+		return !isReplace;
 	}
 
 	const Value* get(const Key& key) const{
@@ -329,7 +331,7 @@ public:
 		//clear the value.
 		subtree->value = Value();
 		assert(subtree->size > 0);
-		
+
 		auto i = KeyTraits::index(key, index);
 		assert(i != static_cast<unsigned int>(-1) || subtree == root);
 		subtree = root;
@@ -401,11 +403,11 @@ public:
 template<class Char, class Value>
 class TernarySearchTrie{
 	struct Node{
-		Char ch = Char();
 		Node *l = nullptr, *r = nullptr, *m = nullptr;
-		Value value = Value();
-		bool hasValue = false;
 		unsigned int size = 0;
+		Value value = Value();
+		Char ch = Char();
+		bool hasValue = false;
 		bool isValid(){
 			if(size <= 0){
 				std::cerr << "size is zero" << std::endl;
@@ -440,7 +442,7 @@ class TernarySearchTrie{
 			if(nullptr != l) l->getAllKeys(seq, prefix);
 			if(nullptr != r) r->getAllKeys(seq, prefix);
 		}
-		
+
 	};
 	static void deleteNode(Node* node){
 		if(node->l != nullptr) deleteNode(node->l);
@@ -573,7 +575,7 @@ public:
 			}
 
 		}
-		
+
 		assert(isValid());
 		return !isReplace;
 	}
@@ -635,11 +637,11 @@ public:
 		if(nullptr == root) return false;
 		unsigned int index = -1;
 		if(root->hasValue) index = 0;
-		
+
 		if(s.size() > 0){
 			unsigned int i = 0;
 			auto node = root->m;
-			
+
 			while(nullptr != node){
 				if(s[i] < node->ch) node = node->l;
 				else if(node->ch < s[i])	node = node->r;
@@ -673,7 +675,7 @@ unsigned int buildDFA(const Str& str, unsigned int n, DFA& dfa){
 }
 
 template<class Str>
-unsigned int bruteForceSearch(const Str& src, unsigned int n, 
+unsigned int bruteForceSearch(const Str& src, unsigned int n,
   const Str& pattern, unsigned int m){
 	for (unsigned int i = 0;i + m <= n;++ i){
 		unsigned int j = 0;
@@ -703,7 +705,7 @@ unsigned int bruteForceSearch(const Str& src, const Str& pattern){
 }
 
 template<class Str, class All>
-void bruteForceSearch(const Str& src, unsigned int n, 
+void bruteForceSearch(const Str& src, unsigned int n,
   const Str& pattern, unsigned int m, All& all){
 	unsigned int (*func)(const Str&, unsigned int, const Str&, unsigned int) = bruteForceSearch;
 	searchAllBase(src, n, pattern, m, all, func);
@@ -719,7 +721,7 @@ template<class Str>
 unsigned int kmpSearch(const Str& src, unsigned int n,
 	const Str& pattern, unsigned int m){
 	typedef typename std::remove_cv<typename std::remove_reference<decltype(src[0])>::type >::type Char;
-	std::unordered_map<unsigned int, 
+	std::unordered_map<unsigned int,
 		std::unordered_map<Char, unsigned int> > dfa;
 	buildDFA(pattern, m, dfa);
 
@@ -742,7 +744,7 @@ template<class Str, class All>
 void kmpSearch(const Str& src, unsigned int n,
 	const Str& pattern, unsigned int m, All& all){
 	typedef typename std::remove_cv<typename std::remove_reference<decltype(src[0])>::type >::type Char;
-	std::unordered_map<unsigned int, 
+	std::unordered_map<unsigned int,
 		std::unordered_map<Char, unsigned int> > dfa;
 	unsigned int restartState = buildDFA(pattern, m, dfa);
 
@@ -765,7 +767,7 @@ void kmpSearch(const Str& src, unsigned int n,
 
 template<class Str>
 unsigned int kmpSearch(const Str& src, const Str& pattern){
-	return kmpSearch(src, src.size(), pattern, pattern.size()); 
+	return kmpSearch(src, src.size(), pattern, pattern.size());
 }
 
 template<class Str, class All>
@@ -798,11 +800,11 @@ unsigned int boyerMooreSearch(const Str& src, unsigned int n,
 
 template<class Str>
 unsigned int boyerMooreSearch(const Str& src, const Str& pattern){
-	return boyerMooreSearch(src, src.size(), pattern, pattern.size()); 
+	return boyerMooreSearch(src, src.size(), pattern, pattern.size());
 }
 
 template<class Str, class All>
-void boyerMooreSearch(const Str& src, unsigned int n, 
+void boyerMooreSearch(const Str& src, unsigned int n,
   const Str& pattern, unsigned int m, All& all){
 	unsigned int (*func)(const Str&, unsigned int, const Str&, unsigned int) = boyerMooreSearch;
 	searchAllBase(src, n, pattern, m, all, func);
@@ -816,7 +818,7 @@ void boyerMooreSearch(const Str& src, const Str& pattern, All& all){
 
 template<class Str>
 unsigned int rabinKarpSearch(const Str& src, unsigned int n,
-	const Str& pattern, unsigned int m, 
+	const Str& pattern, unsigned int m,
 	unsigned int radius = 256, unsigned long long prime = 429496729uLL/*Not neccessarily be a prime number*/){
 	if (m == 0) return 0;
 	if (n < m) return n;
@@ -853,13 +855,13 @@ unsigned int rabinKarpSearch(const Str& src, unsigned int n,
 
 template<class Str>
 unsigned int rabinKarpSearch(const Str& src, const Str& pattern){
-	return rabinKarpSearch(src, src.size(), pattern, pattern.size()); 
+	return rabinKarpSearch(src, src.size(), pattern, pattern.size());
 }
 
 template<class Str, class All>
-void rabinKarpSearch(const Str& src, unsigned int n, 
+void rabinKarpSearch(const Str& src, unsigned int n,
   const Str& pattern, unsigned int m, All& all){
-	searchAllBase(src, n, pattern, m, all, 
+	searchAllBase(src, n, pattern, m, all,
 	  [](const Str& str, unsigned int n, const Str& pat, unsigned int m){
 	  	return rabinKarpSearch(str, n, pat, m);
 	  }
@@ -946,7 +948,7 @@ std::pair<unsigned int, unsigned int> rabinKarpSearch(const TDArraySrc& src, uns
 					// probably do a real match here
 					return {i, j - v + 1};
 				}
-				
+
 			}
 		}
 	}
@@ -959,7 +961,7 @@ class RegExpr{
 		char ch = 0;
 		char type = 0;
 		unsigned int start = 0, end = 0;
-		State(char ch, char type = 0, unsigned int start = 0, unsigned int end = 0) 
+		State(char ch, char type = 0, unsigned int start = 0, unsigned int end = 0)
 			: type(type), ch(ch), start(start), end(end){
 		}
 	};
@@ -1105,6 +1107,545 @@ public:
 			calcStates(indices);
 		}
 		return (indices.find(pattern.size()) != indices.end());
+	}
+};
+
+template<class ForwardIterator>
+void copy(ForwardIterator begin, ForwardIterator end, std::vector<bool>& bitArray){
+	typedef typename std::remove_cv<decltype(*begin)>::type Element;
+	while(begin != end){
+		Element e = *begin;
+		for(unsigned int i = 0;i < sizeof(Element) * 8;++ i){
+			bitArray.push_back(e % 2 == 1);
+			e /= 2;
+		}
+		++begin;
+	}
+}
+
+template<class Seq, class Element>
+void copy(const std::vector<bool>& bitArray, Seq& seq){
+	for(size_t i = 0;i < bitArray.size();++ i){
+		Element e = Element();
+		unsigned int j = std::min(bitArray.size(), i + sizeof(Element));
+		for(;j > i;--j){
+			e *= 2;
+			if (bitArray[j - 1]) e += 1;
+		}
+		i += sizeof(Element);
+	}
+}
+
+template<class BitArray, class CounterArray>
+class RunLengthT{
+public:
+	static void compress(const BitArray& input, CounterArray& output, unsigned int maxLength = 255){
+		unsigned int count = 0;
+		bool lastValue = false;
+		for(const auto& oneBit: input){
+			if(oneBit != lastValue){
+				output.push_back(count);
+				count = 1;
+				lastValue = !lastValue;
+			}else if(count < maxLength){
+				++count;
+			}else{
+				output.push_back(count);
+				output.push_back(0);
+				count = 1;
+			}
+		}
+		output.push_back(count);
+	}
+	static void decompress(const CounterArray& input, BitArray& output){
+		bool currentValue = false;
+		for(auto count : input){
+			while(count > 0){
+				output.push_back(currentValue);
+				--count;
+			}
+			currentValue = !currentValue;
+		}
+	}
+};
+
+using RunLength = RunLengthT<std::vector<bool>, std::vector<unsigned char> >;
+
+struct BASplitor{
+	BASplitor(const char separator = ' ', unsigned int block = 8)
+		: separator(separator), block(block){
+	}
+
+	friend BASplitor operator<<(std::ostream& os, BASplitor splitor){
+		splitor.os = &os;
+		return splitor;
+	}
+
+	template<class BitArray>
+	friend std::ostream& operator<<(BASplitor splitor, const BitArray& bitArray){
+		for(unsigned int i = 0;i < bitArray.size();++ i){
+			*splitor.os << bitArray[i];
+			if((i + 1) % splitor.block == 0) *splitor.os << splitor.separator;
+		}
+		return *splitor.os;
+	}
+private:
+	const char separator = ' ';
+	unsigned int block = 8;
+	std::ostream *os = nullptr;
+};
+
+class Huffman{
+public:
+
+	/*
+	 * frequency : value to its frequency map, value is the index in an input array.
+	 * index : assume 0 <= i < n, i and index[i] should equal each other.
+	 * */
+	template<class Frequency, class Index>
+	static void computeFrequency(unsigned int n, Frequency& frequency, Index& index){
+		for(unsigned int i = 0;i < n;++ i){
+			auto pos = frequency.find(i);
+			if(pos == frequency.end()){
+				index[i] = i;
+				frequency.insert({i, 1});
+			}else{
+				index[i] = pos->first;
+				++pos->second;
+			}
+		}
+	}
+
+	template<class Frequency, class Tree, class NodeComparator>
+	static void buildTree(const Frequency& frequency, Tree& treeCreator, NodeComparator comparator){
+		typedef decltype(treeCreator.create(*frequency.begin())) Node;
+		std::priority_queue<Node, std::vector<Node>, NodeComparator> pq(comparator);
+		for(const auto& one : frequency) pq.push(treeCreator.create(one));
+		while(!pq.empty()){
+			auto left = pq.top();
+			pq.pop();
+			if(pq.empty()){
+				treeCreator.root(left);
+				return;
+			}
+			auto right = pq.top();
+			pq.pop();
+			pq.push(treeCreator.create(left, right));
+		}
+	}
+
+	/*
+	 * Build prefix free code
+	 * */
+	template<class Tree, class PFCode>
+	static void buildPFCode(const Tree& tree, PFCode& pfCode){
+		if(tree.empty()) return;
+		typedef typename std::remove_cv<decltype(pfCode[tree.value(tree.root())])>::type NoCVType;
+		typedef typename std::remove_reference<NoCVType>::type Code;
+		std::queue<std::pair<decltype(tree.root()), Code> > codes;
+		codes.push({tree.root(), Code()});
+		while(!codes.empty()){
+			bool isLeave = true;
+			auto& node = codes.front();
+			//std::cout << node.first << std::endl;
+			if(tree.hasLeft(node.first)){
+				isLeave = false;
+				codes.push({tree.left(node.first), node.second});
+				codes.back().second.push_back(false);
+			}
+			if(tree.hasRight(node.first)){
+				isLeave = false;
+				codes.push({tree.right(node.first), node.second});
+				codes.back().second.push_back(true);
+			}
+			if(isLeave){
+				pfCode[tree.value(node.first)] = node.second;
+			}
+			codes.pop();
+		}
+	}
+
+	template<class Tree, class BitArray, class Node>
+	static void saveSubTree(const Tree& tree, Node subTree, BitArray& bitArray){
+		if(!tree.hasLeft(subTree) && !tree.hasRight(subTree)){
+			bitArray.push_back(true);
+			tree.saveValue(subTree, bitArray);
+			return;
+		}
+		bitArray.push_back(false);
+		if(tree.hasLeft(subTree)){
+			saveSubTree(tree, tree.left(subTree), bitArray);
+		}
+		if(tree.hasRight(subTree)){
+			saveSubTree(tree, tree.right(subTree), bitArray);
+		}
+	}
+
+	template<class Tree, class BitArray>
+	static void saveTree(const Tree& tree, BitArray& bitArray){
+		if(tree.empty()) return;
+		saveSubTree(tree, tree.root(), bitArray);
+	}
+
+	template<class Tree, class BitArray, class Node>
+	static unsigned int readSubTree(const BitArray& bitArray,
+		unsigned int start, Tree& tree, Node& n){
+		if(start >= bitArray.size()) return static_cast<unsigned int>(-1);
+		if(bitArray[start]) return tree.readValue(bitArray, start + 1, n);
+		Node left = Node();
+		auto nextStart = readSubTree(bitArray, start + 1, tree, left);
+		if(static_cast<unsigned int>(-1) == nextStart)
+			return static_cast<unsigned int>(-1);
+		Node right = Node();
+		nextStart = readSubTree(bitArray, nextStart, tree, right);
+		if(static_cast<unsigned int>(-1) == nextStart)
+			return static_cast<unsigned int>(-1);
+		n = tree.create(left, right);
+		return nextStart;
+	}
+
+	template<class BitArray, class Tree>
+	static unsigned int readTree(const BitArray& bitArray, Tree& tree){
+		typedef decltype(tree.root()) Node;
+		Node root = Node();
+		unsigned int current = readSubTree(bitArray, 0, tree, root);
+		if(static_cast<unsigned int>(-1) != current){
+		 	tree.root(root);
+		}
+		return current;
+	}
+
+	struct Node{
+		unsigned int right, left;
+		Node(unsigned int right, unsigned int left = -1) : right(right), left(left){
+		}
+		template<class Stream>
+		friend Stream& print(Stream& os, Node n){
+			if(static_cast<unsigned int>(-1) == n.left){
+				os << "v=" << n.right;
+			}else{
+				os << "l=" << n.left << ", r= " << n.right;
+			}
+			return os;
+		}
+		template<class Stream>
+		friend Stream& operator<<(Stream& os, Node n){
+			return (os << "(").print(n) << ")";
+		}
+	};
+	struct NodeWithFrequency : public Node{
+		unsigned int frequency;
+		NodeWithFrequency(unsigned int right, unsigned int frequency,
+			unsigned int left = static_cast<unsigned int>(-1))
+			: Node(right, left), frequency(frequency){
+		}
+		template<class Stream>
+		friend Stream& operator<<(Stream& os, NodeWithFrequency n){
+			return print(os << "(", n) << ", f=" << n.frequency << ")";
+		}
+	};
+	template<class Tree>
+	struct NodeComparator{
+		const Tree& tree;
+		NodeComparator(const Tree& tree) : tree(tree){
+		}
+		bool operator()(unsigned int n1, unsigned int n2){
+			return tree.nodes[n2].frequency < tree.nodes[n1].frequency;
+		}
+	};
+
+	template<class Node>
+	struct Tree{
+
+		std::vector<Node> nodes;
+
+		bool empty() const {
+			return nodes.empty();
+		}
+
+		unsigned int create(std::pair<unsigned int, unsigned int> data){
+			auto index = nodes.size();
+			nodes.push_back(Node(data.first, data.second));
+			return index;
+		}
+
+		unsigned int create(unsigned int left, unsigned int right){
+			assert(left < nodes.size() && right < nodes.size());
+			auto index = nodes.size();
+			nodes.push_back(Node(right, left));
+			return index;
+		}
+
+		void root(unsigned int root){
+			assert(nodes.size() - 1 == root);
+		}
+
+		unsigned int root() const {
+			return nodes.size() - 1;
+		}
+
+		bool hasLeft(unsigned int n) const {
+			return static_cast<unsigned int>(-1) != nodes[n].left;
+		}
+
+		bool hasRight(unsigned int n) const {
+			return hasLeft(n);
+		}
+
+		unsigned int left(unsigned int n) const {
+			return nodes[n].left;
+		}
+
+		unsigned int right(unsigned int n) const {
+			return nodes[n].right;
+		}
+
+		unsigned int value(unsigned int n) const {
+			return nodes[n].right;
+		}
+	};
+
+	template<class BitArrayInput>
+	struct TreeWithFrequency : public Tree<NodeWithFrequency> {
+		typedef Tree<NodeWithFrequency> Super;
+		using Super::create;
+		unsigned int numBits;
+		const BitArrayInput& input;
+		TreeWithFrequency(const BitArrayInput& input, unsigned int numBits) : input(input), numBits(numBits){
+		}
+		unsigned int create(unsigned int left, unsigned int right){
+			assert(left < Super::nodes.size() && right < Super::nodes.size());
+			auto index = Super::nodes.size();
+			Super::nodes.push_back(NodeWithFrequency(right,
+					Super::nodes[left].frequency + Super::nodes[right].frequency, left));
+			return index;
+		}
+
+		template<class BitArray>
+		void saveValue(unsigned int n, BitArray& bitArray) const {
+			assert(!Super::hasLeft(n) && !Super::hasRight(n));
+			auto start = Super::nodes[n].right * numBits;
+			auto end = start + numBits;
+			//std::cout << Super::nodes[n].right << '\t';
+			for(;start < end;++ start){
+			 	bitArray.push_back(bool(input[start]));
+				//std::cout << input[start];
+			}
+			//std::cout << std::endl;
+		}
+	};
+
+	struct NodeWithCode : public Node{
+		std::vector<bool> code;
+		NodeWithCode(unsigned int left = static_cast<unsigned int>(-1),
+			 unsigned int right = static_cast<unsigned int>(-1)) : Node(left, right){
+		}
+
+		template<class Stream>
+		friend Stream& operator<<(Stream& os, const NodeWithCode& n){
+			if(static_cast<unsigned int>(-1) == n.left){
+				os << "(v=" << BASplitor() << n.code;
+			}else{
+				os << "(l=" << n.left << ", r= " << n.right;
+			}
+			return os << ")";
+		}
+	};
+
+	struct TreeReader : public Tree<NodeWithCode>{
+		typedef Tree<NodeWithCode> Super;
+		unsigned int numBits;
+		TreeReader(unsigned int numBits) : numBits(numBits){
+		}
+
+		template<class BitArray>
+		unsigned int readValue(const BitArray& bitArray, unsigned int start, unsigned int& n){
+			if(start + numBits > bitArray.size()) return static_cast<unsigned int>(-1);
+			auto end = start + numBits;
+			n = Super::nodes.size();
+			Super::nodes.push_back(NodeWithCode());
+
+			auto& code = Super::nodes.back().code;
+			for(;start < end;++ start) code.push_back(bool(bitArray[start]));
+			return end;
+		}
+
+		const std::vector<bool>& value(unsigned int n) const {
+			return Super::nodes[n].code;
+		}
+	};
+
+	struct TreeReaderShort : public Tree<Node>{
+		typedef Tree<Node> Super;
+		unsigned int numBits;
+		TreeReaderShort(unsigned int numBits) : numBits(numBits){
+			assert(numBits <= 8 * sizeof(unsigned int));
+		}
+
+		template<class BitArray>
+		unsigned int readValue(const BitArray& bitArray, unsigned int start, unsigned int& n){
+			if(start + numBits > bitArray.size()) return static_cast<unsigned int>(-1);
+			auto end = start + numBits;
+			n = Super::nodes.size();
+			Super::nodes.push_back(Node(0));
+
+			auto& code = Super::nodes.back().right;
+			unsigned int p2 = 1;
+			for(;start < end;++ start){
+				if(bool(bitArray[start]))
+					code |= p2;
+				p2 <<= 1;
+			}
+			return end;
+		}
+
+		struct Bits{
+			struct BitsIterator{
+				unsigned int value, current;
+				BitsIterator(unsigned int value, unsigned int current) : value(value), current(current){
+				}
+				bool operator *(){
+					return ((1 << current) & value) != 0;
+				}
+				bool operator ==(const BitsIterator bi) const {
+					return current == bi.current;
+				}
+				bool operator !=(const BitsIterator bi) const {
+					return current != bi.current;
+				}
+				BitsIterator& operator ++() {
+					++current;
+					return *this;
+				}
+				BitsIterator operator ++(int) {
+					BitsIterator bi = *this;
+					++current;
+					return bi;
+				}
+			};
+			unsigned int value, numBits;
+			BitsIterator begin(){ return {value, 0}; }
+			BitsIterator end(){ return {value, numBits}; }
+			Bits(unsigned int value, unsigned int numBits) : value(value), numBits(numBits){
+			}
+		};
+
+		Bits value(unsigned int n) const {
+			return Bits(Super::nodes[n].right, numBits);
+		}
+	};
+
+	/*
+	 * Number of bits in input should be dividable by numBits.
+	 * */
+	template<class BitArrayInput, class BitArrayOutput>
+	static bool compress(const BitArrayInput& input, BitArrayOutput& output, unsigned int numBits = 8){
+		assert(input.size() % numBits == 0);
+		if(input.size() == 0 || input.size() % numBits != 0) return false;
+		auto func =
+			[&input, &numBits](unsigned int i, unsigned int j){
+				i *= numBits;
+				j *= numBits;
+				for(unsigned int k = 0;k < numBits;++ k){
+					bool bi = input[i + k], bj = input[j + k];
+					if(bi != bj) return bi;
+				}
+				return  false;
+			};
+
+		std::map<unsigned int, unsigned int, decltype(func) > frequency(func);
+		auto count = input.size() / numBits;
+		std::vector<unsigned int> index(count);
+		std::map<unsigned int, std::vector<bool> > pfCode;
+		{
+			typedef TreeWithFrequency<BitArrayInput> TWF;
+			TWF tree(input, numBits);
+			computeFrequency(count, frequency, index);
+			/*std::cout << "\nfrequency : " << std::endl;
+			for(auto& one : frequency) std::cout << one.first << ' ' << one.second << std::endl;
+			std::cout << "index : " << std::endl;
+			for(auto& one : index) std::cout << one << ' ';*/
+
+			buildTree(frequency, tree, NodeComparator<TWF>(tree));
+			/*std::cout << "\ntree : " << std::endl;
+			for(auto& one : tree.nodes) std::cout << one << ' ';*/
+			saveTree(tree, output);
+			if(!tree.hasLeft(tree.root()) && !tree.hasRight(tree.root())){
+				for(unsigned int i = 0;i < count;++ i){
+					output.push_back(false);
+				}
+				return true;
+			}
+
+			buildPFCode(tree, pfCode);
+			/*std::cout << "\ntree output : " << std::endl;
+			std::cout << BASplitor() << output << std::endl;
+			std::cout << "\nprefix: " << std::endl;
+			for(auto& one : pfCode) std::cout << one.first << '\t' << BASplitor() << one.second << std::endl;
+			TreeReader reader(numBits);
+			readTree(output, reader);
+			std::cout << "\ntree : " << std::endl;
+			for(auto& one : reader.nodes) std::cout << one << ' ';
+			std::map<std::vector<bool>, std::vector<bool> > testPFCode;
+			buildPFCode(reader, testPFCode);
+			for(auto& one : testPFCode) std::cout << BASplitor() << one.first << '\t' << BASplitor() << one.second << std::endl;*/
+		}
+		for(unsigned int i = 0;i < count;++ i){
+			assert(pfCode[index[i]].begin() != pfCode[index[i]].end());
+			for(auto bit : pfCode[index[i]]) output.push_back(bool(bit));
+		}
+		return true;
+	}
+
+	template<class Tree, class Node, class BitArrayInput, class BitArrayOutput>
+	static unsigned int decode(const Tree& tree, Node node, const BitArrayInput& input, unsigned int start, BitArrayOutput& output){
+		if (!tree.hasLeft(node) && !tree.hasRight(node)){
+			for(auto bit : tree.value(node)) output.push_back(bit);
+			return start;
+		}
+		if (input[start]){
+			assert(tree.hasRight(node));
+			return decode(tree, tree.right(node), input, start + 1, output);
+		}
+		assert(tree.hasLeft(node));
+		return decode(tree, tree.left(node), input, start + 1, output);
+	}
+
+	template<class BitArrayInput, class BitArrayOutput>
+	static bool decompress(const BitArrayInput& input, BitArrayOutput& output, unsigned int numBits=8){
+			TreeReader tree(numBits);
+			unsigned int current = readTree(input, tree);
+			/*std::cout << "current : " << current;
+			std::cout << "\ntree : " << std::endl;
+			for(auto& one : reader.nodes) std::cout << one << ' ';
+			std::map<std::vector<bool>, std::vector<bool> > testPFCode;
+			buildPFCode(reader, testPFCode);
+			std::cout << "\nprefix code : " << std::endl;
+			for(auto& one : testPFCode) std::cout << BASplitor() << one.first << '\t' << BASplitor() << one.second << std::endl;*/
+			if(tree.empty()) return false;
+
+			if(!tree.hasLeft(tree.root()) && !tree.hasRight(tree.root())){
+				if(static_cast<unsigned int>(-1) == current) return false;
+				while(current < input.size()){
+					for(auto bit : tree.value(tree.root())) output.push_back(bit);
+					++current;
+				}
+				return true;
+			}
+			while(static_cast<unsigned int>(-1) != current && current != input.size())
+				current = decode(tree, tree.root(), input, current, output);
+			return static_cast<unsigned int>(-1) != current;
+
+	}
+};
+
+class LZW{
+public:
+	template<class BitArrayInput, class BitArrayOutput>
+	bool compress(const BitArrayInput& input, const BitArrayOutput& output){
+	}
+	template<class BitArrayInput, class BitArrayOutput>
+	bool decompress(const BitArrayInput& input, const BitArrayOutput& output){
 	}
 };
 
