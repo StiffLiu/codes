@@ -400,7 +400,7 @@ public:
 
 };
 
-template<class Char, class Value>
+template<class Char, class Value, class Comparator = std::less<Char> >
 class TernarySearchTrie{
 	struct Node{
 		Node *l = nullptr, *r = nullptr, *m = nullptr;
@@ -456,9 +456,9 @@ class TernarySearchTrie{
 		auto node = key.size() > 0 ? (tst->root != nullptr ? tst->root->m : nullptr) : tst->root;
 		while(node != nullptr){
 			while(node != nullptr){
-				if(key[i] < node->ch){
+				if(tst->comparator(key[i], node->ch)){
 					node = node->l;
-				}else if(node->ch < key[i]){
+				}else if(tst->comparator(node->ch, key[i])){
 					node = node->r;
 				}else{
 					++ i;
@@ -472,8 +472,9 @@ class TernarySearchTrie{
 		return node;
 	}
 	Node *root = nullptr;
+	Comparator comparator;
 public:
-	TernarySearchTrie(){
+	TernarySearchTrie(Comparator comparator = Comparator()) : comparator(comparator){
 	}
 	TernarySearchTrie(const TernarySearchTrie&) = delete;
 	TernarySearchTrie& operator=(const TernarySearchTrie&) = delete;
@@ -482,7 +483,7 @@ public:
 		tst.root = nullptr;
 	}
 	~TernarySearchTrie(){
-		if(root != nullptr) deleteNode(root);
+		clear();
 	}
 	template<class Key>
 	const Value* get(const Key& key) const{
@@ -497,6 +498,12 @@ public:
 	}
 	unsigned int size(){
 		return root == nullptr ? 0 : root->size;
+	}
+	void clear(){
+		if(root != nullptr){
+		 	deleteNode(root);
+			root = nullptr;
+		}
 	}
 	template<class Key>
 	bool contains(const Key& key) const{
@@ -522,7 +529,7 @@ public:
 		unsigned int i = 0;
 		while(i < key.size()){
 			while(true){
-				if(key[i] < node->ch){
+				if(comparator(key[i], node->ch)){
 					if(node->l == nullptr){
 						node->l = new Node;
 						node = node->l;
@@ -530,7 +537,7 @@ public:
 						break;
 					}
 					node = node->l;
-				}else if(node->ch < key[i]){
+				}else if(comparator(node->ch, key[i])){
 					if(node->r == nullptr){
 						node->r = new Node;
 						node = node->r;
@@ -564,9 +571,9 @@ public:
 			i = 0;
 			while(i < key.size()){
 				++ node->size;
-				if(key[i] < node->ch){
+				if(comparator(key[i], node->ch)){
 					node = node->l;
-				}else if(node->ch < key[i]){
+				}else if(comparator(node->ch, key[i])){
 					node = node->r;
 				}else{
 					node = node->m;
@@ -605,10 +612,10 @@ public:
 				break;
 			}
 			--node->size;
-			if(key[i] < node->ch){
+			if(comparator(key[i], node->ch)){
 				link = &node->l;
 				node = node->l;
-			}else if(node->ch < key[i]){
+			}else if(comparator(node->ch, key[i])){
 				link = &node->r;
 				node = node->r;
 			}else{
@@ -632,27 +639,46 @@ public:
 		if(nullptr != node) node->getAllKeys(seq, mutablePrefix);
 	}
 
-	template<class Key, class Prefix>
-	bool longestPrefixOf(const Key& s, Prefix& key){
-		if(nullptr == root) return false;
-		unsigned int index = -1;
-		if(root->hasValue) index = 0;
+	template<class Key>
+	const Node* longestPrefixOf(const Key& s, unsigned int& index) const {
+		if(nullptr == root) return nullptr;
+		const Node* value = nullptr;
+		if(root->hasValue){
+			value = root;
+		 	index = 0;
+		}
 
 		if(s.size() > 0){
 			unsigned int i = 0;
 			auto node = root->m;
 
 			while(nullptr != node){
-				if(s[i] < node->ch) node = node->l;
-				else if(node->ch < s[i])	node = node->r;
+				if(comparator(s[i], node->ch)) node = node->l;
+				else if(comparator(node->ch, s[i]))	node = node->r;
 				else{
 					++ i;
-					if(node->hasValue) index = i;
+					if(node->hasValue){
+						value = node;
+						index = i;
+					}
 					if(i >= s.size()) break;
 					node = node->m;
 				}
 			}
 		}
+		return value;
+	}
+
+	template<class Key>
+	void longestPrefixOf(const Key& s, Value& value, unsigned int& index) const {
+		auto node = longestPrefixOf(s, index);
+		if(nullptr != node) value = node->value;
+	}
+
+	template<class Key, class Prefix>
+	bool longestPrefixOf(const Key& s, Prefix& key) const {
+		unsigned int index = -1;
+		longestPrefixOf(s, index);
 		if(index == static_cast<unsigned int>(-1)) return false;
 		key = Prefix();
 		for(unsigned int i = 0;i < index;++ i) key.push_back(s[i]);
@@ -1112,7 +1138,7 @@ public:
 
 template<class ForwardIterator>
 void copy(ForwardIterator begin, ForwardIterator end, std::vector<bool>& bitArray){
-	typedef typename std::remove_cv<decltype(*begin)>::type Element;
+	typedef typename std::remove_reference<typename std::remove_cv<decltype(*begin)>::type>::type Element;
 	while(begin != end){
 		Element e = *begin;
 		for(unsigned int i = 0;i < sizeof(Element) * 8;++ i){
@@ -1172,8 +1198,9 @@ public:
 using RunLength = RunLengthT<std::vector<bool>, std::vector<unsigned char> >;
 
 struct BASplitor{
-	BASplitor(const char separator = ' ', unsigned int block = 8)
-		: separator(separator), block(block){
+	BASplitor(const char separator = ' ', unsigned int block = 8,
+		 unsigned int start = 0, unsigned int count = static_cast<unsigned int>(-1))
+		: separator(separator), block(block), start(start), count(count){
 	}
 
 	friend BASplitor operator<<(std::ostream& os, BASplitor splitor){
@@ -1183,7 +1210,10 @@ struct BASplitor{
 
 	template<class BitArray>
 	friend std::ostream& operator<<(BASplitor splitor, const BitArray& bitArray){
-		for(unsigned int i = 0;i < bitArray.size();++ i){
+		unsigned int size = bitArray.size();
+		if(static_cast<unsigned int>(-1) != splitor.count) size = splitor.start + splitor.count;
+		if(size > bitArray.size()) size = bitArray.size();
+		for(unsigned int i = splitor.start;i < size;++ i){
 			*splitor.os << bitArray[i];
 			if((i + 1) % splitor.block == 0) *splitor.os << splitor.separator;
 		}
@@ -1192,6 +1222,8 @@ struct BASplitor{
 private:
 	const char separator = ' ';
 	unsigned int block = 8;
+	unsigned int start = 0;
+	unsigned int count = static_cast<unsigned int>(-1);
 	std::ostream *os = nullptr;
 };
 
@@ -1405,13 +1437,43 @@ public:
 		}
 	};
 
-	template<class BitArrayInput>
-	struct TreeWithFrequency : public Tree<NodeWithFrequency> {
+	struct ToBit{
+		template<class Value, class BitArray>
+		void convert(Value value, BitArray& bitArray) const {
+			static_assert(Value(-1) > Value(0), "Expecting an unsigned type");
+			for(unsigned int i = 0;i < sizeof(Value) * 8;++ i){
+				bitArray.push_back(value % 2 == 0 ? false : true);
+				value = value / 2;
+			}
+		}
+		template<class BitArray>
+		void convert(bool value, BitArray& bitArray) const {
+			bitArray.push_back(value);
+		}
+	};
+
+	template<class BitArrayInput, class ValueToBitConverter>
+	struct TreeWithFrequencyBase : public Tree<NodeWithFrequency>{
 		typedef Tree<NodeWithFrequency> Super;
 		using Super::create;
-		unsigned int numBits;
 		const BitArrayInput& input;
-		TreeWithFrequency(const BitArrayInput& input, unsigned int numBits) : input(input), numBits(numBits){
+		ValueToBitConverter converter;
+		TreeWithFrequencyBase(const BitArrayInput& input, const ValueToBitConverter& converter)
+			: input(input), converter(converter){
+		}
+		template<class BitArray>
+		void saveValue(unsigned int n, BitArray& bitArray) const {
+			converter.convert(input[Super::nodes[n].right], bitArray);
+		}
+	};
+
+	template<class BitArrayInput, class ValueToBitConverter>
+	struct TreeWithFrequency : public TreeWithFrequencyBase<BitArrayInput, ValueToBitConverter> {
+		typedef TreeWithFrequencyBase<BitArrayInput, ValueToBitConverter> Super;
+		using Super::create;
+		unsigned int blockSize;
+		TreeWithFrequency(const BitArrayInput& input, unsigned int blockSize,
+			const ValueToBitConverter& converter = ValueToBitConverter()) : Super(input, converter), blockSize(blockSize){
 		}
 		unsigned int create(unsigned int left, unsigned int right){
 			assert(left < Super::nodes.size() && right < Super::nodes.size());
@@ -1424,11 +1486,11 @@ public:
 		template<class BitArray>
 		void saveValue(unsigned int n, BitArray& bitArray) const {
 			assert(!Super::hasLeft(n) && !Super::hasRight(n));
-			auto start = Super::nodes[n].right * numBits;
-			auto end = start + numBits;
+			auto start = Super::nodes[n].right * blockSize;
+			auto end = start + blockSize;
 			//std::cout << Super::nodes[n].right << '\t';
 			for(;start < end;++ start){
-			 	bitArray.push_back(bool(input[start]));
+				Super::converter.convert(Super::input[start], bitArray);
 				//std::cout << input[start];
 			}
 			//std::cout << std::endl;
@@ -1454,14 +1516,14 @@ public:
 
 	struct TreeReader : public Tree<NodeWithCode>{
 		typedef Tree<NodeWithCode> Super;
-		unsigned int numBits;
-		TreeReader(unsigned int numBits) : numBits(numBits){
+		unsigned int blockSize;
+		TreeReader(unsigned int blockSize) : blockSize(blockSize){
 		}
 
 		template<class BitArray>
 		unsigned int readValue(const BitArray& bitArray, unsigned int start, unsigned int& n){
-			if(start + numBits > bitArray.size()) return static_cast<unsigned int>(-1);
-			auto end = start + numBits;
+			if(start + blockSize > bitArray.size()) return static_cast<unsigned int>(-1);
+			auto end = start + blockSize;
 			n = Super::nodes.size();
 			Super::nodes.push_back(NodeWithCode());
 
@@ -1477,15 +1539,15 @@ public:
 
 	struct TreeReaderShort : public Tree<Node>{
 		typedef Tree<Node> Super;
-		unsigned int numBits;
-		TreeReaderShort(unsigned int numBits) : numBits(numBits){
-			assert(numBits <= 8 * sizeof(unsigned int));
+		unsigned int blockSize;
+		TreeReaderShort(unsigned int blockSize) : blockSize(blockSize){
+			assert(blockSize <= 8 * sizeof(unsigned int));
 		}
 
 		template<class BitArray>
 		unsigned int readValue(const BitArray& bitArray, unsigned int start, unsigned int& n){
-			if(start + numBits > bitArray.size()) return static_cast<unsigned int>(-1);
-			auto end = start + numBits;
+			if(start + blockSize > bitArray.size()) return static_cast<unsigned int>(-1);
+			auto end = start + blockSize;
 			n = Super::nodes.size();
 			Super::nodes.push_back(Node(0));
 
@@ -1523,52 +1585,47 @@ public:
 					return bi;
 				}
 			};
-			unsigned int value, numBits;
+			unsigned int value, blockSize;
 			BitsIterator begin(){ return {value, 0}; }
-			BitsIterator end(){ return {value, numBits}; }
-			Bits(unsigned int value, unsigned int numBits) : value(value), numBits(numBits){
+			BitsIterator end(){ return {value, blockSize}; }
+			Bits(unsigned int value, unsigned int blockSize) : value(value), blockSize(blockSize){
 			}
 		};
 
 		Bits value(unsigned int n) const {
-			return Bits(Super::nodes[n].right, numBits);
+			return Bits(Super::nodes[n].right, blockSize);
 		}
 	};
 
 	/*
-	 * Number of bits in input should be dividable by numBits.
+	 * Number of bits in input should be divisible by blockSize.
 	 * */
 	template<class BitArrayInput, class BitArrayOutput>
-	static bool compress(const BitArrayInput& input, BitArrayOutput& output, unsigned int numBits = 8){
-		assert(input.size() % numBits == 0);
-		if(input.size() == 0 || input.size() % numBits != 0) return false;
+	static bool compress(const BitArrayInput& input, BitArrayOutput& output, unsigned int blockSize = 8){
+		assert(input.size() % blockSize == 0);
+		if(input.size() == 0 || blockSize == 0 || input.size() % blockSize != 0) return false;
 		auto func =
-			[&input, &numBits](unsigned int i, unsigned int j){
-				i *= numBits;
-				j *= numBits;
-				for(unsigned int k = 0;k < numBits;++ k){
-					bool bi = input[i + k], bj = input[j + k];
-					if(bi != bj) return bi;
+			[&input, &blockSize](unsigned int i, unsigned int j){
+				i *= blockSize;
+				j *= blockSize;
+				for(unsigned int k = 0;k < blockSize;++ k){
+					auto vi = input[i + k], vj = input[j + k];
+					if(vi < vj) return true;
+					if(vj < vi) return false;
 				}
 				return  false;
 			};
 
 		std::map<unsigned int, unsigned int, decltype(func) > frequency(func);
-		auto count = input.size() / numBits;
+		auto count = input.size() / blockSize;
 		std::vector<unsigned int> index(count);
 		std::map<unsigned int, std::vector<bool> > pfCode;
 		{
-			typedef TreeWithFrequency<BitArrayInput> TWF;
-			TWF tree(input, numBits);
+			typedef TreeWithFrequency<BitArrayInput, ToBit> TWF;
+			TWF tree(input, blockSize);
 			computeFrequency(count, frequency, index);
-			/*std::cout << "\nfrequency : " << std::endl;
-			for(auto& one : frequency) std::cout << one.first << ' ' << one.second << std::endl;
-			std::cout << "index : " << std::endl;
-			for(auto& one : index) std::cout << one << ' ';*/
-
+			//std::cout << "frequency : " << frequency.size() << std::endl;
 			buildTree(frequency, tree, NodeComparator<TWF>(tree));
-			/*std::cout << "\ntree : " << std::endl;
-			for(auto& one : tree.nodes) std::cout << one << ' ';*/
 			saveTree(tree, output);
 			if(!tree.hasLeft(tree.root()) && !tree.hasRight(tree.root())){
 				for(unsigned int i = 0;i < count;++ i){
@@ -1576,19 +1633,7 @@ public:
 				}
 				return true;
 			}
-
 			buildPFCode(tree, pfCode);
-			/*std::cout << "\ntree output : " << std::endl;
-			std::cout << BASplitor() << output << std::endl;
-			std::cout << "\nprefix: " << std::endl;
-			for(auto& one : pfCode) std::cout << one.first << '\t' << BASplitor() << one.second << std::endl;
-			TreeReader reader(numBits);
-			readTree(output, reader);
-			std::cout << "\ntree : " << std::endl;
-			for(auto& one : reader.nodes) std::cout << one << ' ';
-			std::map<std::vector<bool>, std::vector<bool> > testPFCode;
-			buildPFCode(reader, testPFCode);
-			for(auto& one : testPFCode) std::cout << BASplitor() << one.first << '\t' << BASplitor() << one.second << std::endl;*/
 		}
 		for(unsigned int i = 0;i < count;++ i){
 			assert(pfCode[index[i]].begin() != pfCode[index[i]].end());
@@ -1612,16 +1657,9 @@ public:
 	}
 
 	template<class BitArrayInput, class BitArrayOutput>
-	static bool decompress(const BitArrayInput& input, BitArrayOutput& output, unsigned int numBits=8){
-			TreeReader tree(numBits);
+	static bool decompress(const BitArrayInput& input, BitArrayOutput& output, unsigned int blockSize=8){
+			TreeReaderShort tree(blockSize);
 			unsigned int current = readTree(input, tree);
-			/*std::cout << "current : " << current;
-			std::cout << "\ntree : " << std::endl;
-			for(auto& one : reader.nodes) std::cout << one << ' ';
-			std::map<std::vector<bool>, std::vector<bool> > testPFCode;
-			buildPFCode(reader, testPFCode);
-			std::cout << "\nprefix code : " << std::endl;
-			for(auto& one : testPFCode) std::cout << BASplitor() << one.first << '\t' << BASplitor() << one.second << std::endl;*/
 			if(tree.empty()) return false;
 
 			if(!tree.hasLeft(tree.root()) && !tree.hasRight(tree.root())){
@@ -1641,11 +1679,204 @@ public:
 
 class LZW{
 public:
+
+	template<class BitArray>
+	struct OffsetSegmentBitArray{
+		unsigned int offset, segment, count;
+		OffsetSegmentBitArray(unsigned int offset, unsigned int segment, unsigned int count)
+		 	: offset(offset), segment(segment), count(count){
+		}
+		unsigned int operator[](unsigned int index) const {
+			return offset + index * segment;
+		}
+		unsigned int size() const {return count;}
+	};
+
+	struct Codes{
+		std::vector<bool> currentCode;
+		std::vector<bool> codes;
+		unsigned int codeSize;
+		unsigned int current = 0;
+
+		Codes(unsigned int codeSize) : codeSize(codeSize){
+			currentCode.resize(codeSize);
+			currentCode[0] = true;
+		}
+
+		bool hasNext(){
+			while(current * codeSize >= codes.size()){
+				unsigned int i = codeSize - 1;
+				for(;i > 0 && currentCode[i];--i);
+				if(i != 0){
+					currentCode[i] = true;
+					for(++i;i < codeSize;++ i) currentCode[i] = false;
+					for(i = 0;i < codeSize;++ i) codes.push_back(currentCode[i]);
+					continue;
+				}
+				return false;
+			}
+			return true;
+		}
+
+		unsigned int next(){
+			if(!hasNext()) current = 0;
+			return current++;
+		}
+
+		void reset(){
+			current = 0;
+		}
+
+		template<class BitArray>
+		void copy(unsigned int code, BitArray& bitArray){
+			unsigned int start = code * codeSize;
+			unsigned int end = start + codeSize;
+			for(;start < end;++ start) bitArray.push_back(codes[start]);
+		}
+
+		template<class BitArray>
+		void end(BitArray& bitArray){
+			bitArray.push_back(true);
+			for(unsigned int i = 1;i < codeSize;++ i) bitArray.push_back(false);
+		}
+
+		template<class BitArray>
+		bool isCode(const BitArray& bitArray, unsigned int index){
+			return bitArray[index];
+		}
+
+		template<class BitArray>
+		bool isEnd(const BitArray& bitArray, unsigned int index){
+			if(bitArray[index]){
+				for(unsigned int i = 1;i < codeSize;++ i) if(bitArray[index + i]) return false;
+				return true;
+			}
+			return false;
+		}
+
+	};
+
 	template<class BitArrayInput, class BitArrayOutput>
-	bool compress(const BitArrayInput& input, const BitArrayOutput& output){
+	static bool compress(const BitArrayInput& input, 
+		BitArrayOutput& output, unsigned int blockSize = 8, unsigned int codeSize = 9){
+		if(input.size() % blockSize != 0 || codeSize <= blockSize) return false;
+
+		typedef OffsetSegmentBitArray<BitArrayInput> OSBA;
+		OSBA bitArray(0, blockSize, input.size() / blockSize);
+		auto func =
+			[&input, &blockSize](unsigned int i, unsigned int j){
+				for(unsigned int k = 0;k < blockSize;++ k){
+					auto vi = input[i + k], vj = input[j + k];
+					if(vi < vj) return true;
+					if(vj < vi) return false;
+				}
+				return  false;
+			};
+		TernarySearchTrie<unsigned int, unsigned int, decltype(func) > tst(func);
+		Codes codes(codeSize);
+
+		while(bitArray.size() > 0){
+			unsigned int index = static_cast<unsigned int>(-1), value = 0;
+			tst.longestPrefixOf(bitArray, value, index);
+			if(static_cast<unsigned int>(-1) == index){
+				for(unsigned int i = 0;i + blockSize < codeSize;++ i){
+					output.push_back(false);
+				}
+				for(unsigned int i = 0;i < blockSize;++ i){
+					output.push_back(input[bitArray.offset + i]);
+				}
+				index = 1;
+			}else{
+				assert(index > 1);
+				codes.copy(value, output);
+			}
+			if (bitArray.size() >= index + 1){
+				if(!codes.hasNext()){
+					//std::cout << "restarting..." << std::endl;
+					codes.end(output);
+					codes.reset();
+					tst.clear();
+				}else{
+					auto next = codes.next();
+					//std::cout << "code for " << BASplitor(' ', blockSize, bitArray.offset, blockSize * (index + 1))
+					//	<< input << " is " << BASplitor(' ', codeSize, next * codeSize, codeSize) << codes.codes << std::endl;
+					tst.put(OSBA(bitArray.offset, blockSize, (index + 1)), next);
+				}
+			}
+			bitArray.offset += index * blockSize;
+			bitArray.count -= index;
+		}
+		//std::cout << "codes : " << BASplitor(' ', codeSize) << codes.codes << std::endl;
+		return true;
 	}
+
 	template<class BitArrayInput, class BitArrayOutput>
-	bool decompress(const BitArrayInput& input, const BitArrayOutput& output){
+	static bool decompress(const BitArrayInput& input, 
+		BitArrayOutput& output, unsigned int blockSize = 8 , unsigned int codeSize = 9){
+		if(input.size() % codeSize != 0 || codeSize <= blockSize) return false;
+		typedef OffsetSegmentBitArray<BitArrayInput> OSBA;
+		OSBA bitArray(0, blockSize, input.size() / blockSize);
+		auto func =
+			[&input, &codeSize](unsigned int i, unsigned int j){
+				for(unsigned int k = 0;k < codeSize;++ k){
+					auto vi = input[i + k], vj = input[j + k];
+					if(vi < vj) return true;
+					if(vj < vi) return false;
+				}
+				return  false;
+			};
+
+		auto func1 =
+			[&output, &blockSize](unsigned int i, unsigned int j){
+				for(unsigned int k = 0;k < blockSize;++ k){
+					auto vi = output[i + k], vj = output[j + k];
+					if(vi < vj) return true;
+					if(vj < vi) return false;
+				}
+				return  false;
+			};
+
+		std::map<unsigned int, std::pair<unsigned int, unsigned int>, decltype(func) > code2Str(func);
+		TernarySearchTrie<unsigned int, unsigned int, decltype(func1) > tst(func1);
+		Codes codes(codeSize);
+
+		unsigned int count = input.size() / codeSize;
+		unsigned int lastStart = 0;
+		for(unsigned int i = 0;i < input.size();i += codeSize){
+			unsigned int lastEnd = output.size();
+			//std::cout << "current :" << BASplitor(' ', codeSize, i, codeSize) << input << std::endl;
+			if(codes.isCode(input, i)){
+				if(codes.isEnd(input, i)){
+					tst.clear();
+					code2Str.clear();
+					codes.reset();
+					continue;
+				}
+				auto pos = code2Str.find(i);
+				if(pos == code2Str.end()){
+					if(lastStart == lastEnd){
+						// Wrong stream to be decompressed.
+						return false;
+					}
+					for(unsigned int j = lastStart;j < lastEnd;++ j) output.push_back(output[j]);
+					for(unsigned int j = 0;j < blockSize;++ j) output.push_back(output[lastStart + j]);
+					//std::cout << "here... " << std::endl;
+				}else{
+					for(unsigned int j = pos->second.first;j < pos->second.second;++ j) output.push_back(output[j]);
+				}
+			}else{
+				for(unsigned int j = i + codeSize - blockSize, k = 0;k < blockSize;++ k)
+					output.push_back(input[j + k]);
+			}
+			if(codes.hasNext()){
+				lastStart = lastEnd;
+				//std::cout << "output :" << BASplitor(' ', blockSize) << output << std::endl;
+				assert(lastEnd + blockSize <= output.size());
+				tst.put(OSBA(lastStart, blockSize, (lastEnd - lastStart) / blockSize + 1), 
+					codes.next());
+				code2Str[i] = {lastStart, lastEnd + blockSize};
+			}
+		}
 	}
 };
 
