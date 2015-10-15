@@ -9,6 +9,7 @@
 #include <streambuf>
 #include <map>
 #include <set>
+#include <cmath>
 
 #define MEASURETIME(statement, desc) \
 {\
@@ -342,38 +343,82 @@ int test_2d_search(int argc, char *argv[]){
 	return 0;
 }
 
-int test_compress(int argc, char *argv[]){
+void compare_compress(std::vector<unsigned char>& chars, unsigned int blockSize = 8){
 	using namespace my_lib;
-	unsigned char ch = 0b01010101;
-	std::vector<unsigned char> chars({ch, ch, ch, ch, ch, ch, ch, ch, ch, ch});
 	std::vector<bool> bitArray;
 	std::vector<unsigned char> runLength;
-	std::vector<bool> decompressed;
-	
-	copy(chars.begin(), chars.end(), bitArray);
-	BASplitor spr;
-	std::cout << "bitArray : " << spr << bitArray << std::endl;
-	RunLength::compress(bitArray, runLength);
-	std::cout << "Run length compress : ";
-	for(auto length : runLength) std::cout << (unsigned int)length << ' ';
-	std::cout << std::endl;
-	RunLength::decompress(runLength, decompressed);
-	std::cout << "After decompress : " << spr << decompressed << std::endl;
-
 	std::vector<bool> compressed;
-	Huffman::compress(chars, compressed, 1);
-	std::cout << "Huffman compress : " << spr << compressed << std::endl;
-	decompressed.clear();
-	Huffman::decompress(compressed, decompressed, 8);
-	std::cout << "After decompress : " << spr << decompressed << std::endl;
-
+	copy(chars.begin(), chars.end(), bitArray);
+	RunLength::compress(bitArray, runLength);
+	double runLengthRatio = (32 + 
+		log(*std::max_element(runLength.begin(), runLength.end()) + 1) * runLength.size()) / bitArray.size();
+	Huffman::compress(bitArray, compressed, blockSize);
+	double huffmanRatio = compressed.size() / (double)bitArray.size();
 	compressed.clear();
-	decompressed.clear();
-	LZW::compress(bitArray, compressed, 2, 3);
-	std::cout << "LZW compress : " << spr << compressed << std::endl;
-	LZW::decompress(compressed, decompressed, 2, 3);
-	std::cout << "After decompress : " << spr << decompressed << std::endl;
+	LZW::compress(bitArray, compressed, blockSize, blockSize + 1);
+	double lzwRatio = compressed.size() / (double)bitArray.size();
+	std::cout << "(runLength, huffman, lzw)=(" << runLengthRatio << "," << huffmanRatio << "," << lzwRatio << ")" << std::endl;
+}
 
+int test_compress(int argc, char *argv[]){
+	using namespace my_lib;
+	{
+		unsigned char ch = 0b01010101;
+		std::vector<unsigned char> chars({ch, ch, ch, ch, ch, ch, ch, ch, ch, ch});
+		std::vector<bool> bitArray;
+		std::vector<unsigned char> runLength;
+		std::vector<bool> decompressed;
+		
+		copy(chars.begin(), chars.end(), bitArray);
+		BASplitor spr;
+		std::cout << "bitArray : " << spr << bitArray << std::endl;
+		RunLength::compress(bitArray, runLength);
+		std::cout << "Run length compress : ";
+		for(auto length : runLength) std::cout << (unsigned int)length << ' ';
+		std::cout << std::endl;
+		RunLength::decompress(runLength, decompressed);
+		std::cout << "After decompress : " << spr << decompressed << std::endl;
+
+		std::vector<bool> compressed;
+		Huffman::compress(chars, compressed, 1);
+		std::cout << "Huffman compress : " << spr << compressed << std::endl;
+		decompressed.clear();
+		Huffman::decompress(compressed, decompressed, 8);
+		std::cout << "After decompress : " << spr << decompressed << std::endl;
+
+		compressed.clear();
+		decompressed.clear();
+		LZW::compress(bitArray, compressed, 2, 3);
+		std::cout << "LZW compress : " << spr << compressed << std::endl;
+		LZW::decompress(compressed, decompressed, 2, 3);
+		std::cout << "After decompress : " << spr << decompressed << std::endl;
+	}
+	unsigned int blockSize = 8;
+	if (argc > 1) blockSize = atoi(argv[1]);
+	if(blockSize < 2) blockSize = 2;
+	std::cout << "block size is : " << blockSize << std::endl;
+	{
+		std::cout << "===========random ascii string===========" << std::endl;
+		const char *alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		for(unsigned int i = 1000;i < 100000;i += 1000)
+		{
+			std::vector<unsigned char> chars;
+			for(unsigned int j = 0;j < i;++j) chars.push_back(alphabet[rand() % 52]);
+			compare_compress(chars, blockSize);
+		}
+	}
+	{
+		std::cout << "===========repeating string of \"ab\"===========" << std::endl;
+		for(unsigned int i = 1;i < 100000;i += 1000)
+		{
+			std::vector<unsigned char> chars;
+			for(unsigned int j = 0;j < i;++j){
+			 	chars.push_back('a');
+			 	chars.push_back('b');
+			}
+			compare_compress(chars, blockSize);
+		}
+	}
 
 	return 0;
 }

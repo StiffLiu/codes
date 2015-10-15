@@ -921,7 +921,7 @@ std::pair<unsigned int, unsigned int> rabinKarpSearch(const TDArraySrc& src, uns
 	const TDArrayPat& pat, unsigned int h, unsigned int v, unsigned int radius = 256, unsigned long long prime = 429496729uLL){
 	if (h <= m && v <= n && m > 0 && n > 0){
 		unsigned long long patHash = 0, srcHash = 0;
-		unsigned int row = m - h + 1, col = n - v + 1;
+		unsigned int row = m - h + 1;
 		std::unique_ptr<unsigned long long> srcHashColsPtr(new unsigned long long[n]);//, [](unsigned long long *p){delete[] p;});
 		unsigned long long *srcHashCols = srcHashColsPtr.get();
 		const unsigned int radiusCol = radius;
@@ -984,8 +984,8 @@ std::pair<unsigned int, unsigned int> rabinKarpSearch(const TDArraySrc& src, uns
 class RegExpr{
 	static const char Char = '\0';
 	struct State{
-		char ch = 0;
 		char type = 0;
+		char ch = 0;
 		unsigned int start = 0, end = 0;
 		State(char ch, char type = 0, unsigned int start = 0, unsigned int end = 0)
 			: type(type), ch(ch), start(start), end(end){
@@ -1840,7 +1840,6 @@ public:
 		TernarySearchTrie<unsigned int, unsigned int, decltype(func1) > tst(func1);
 		Codes codes(codeSize);
 
-		unsigned int count = input.size() / codeSize;
 		unsigned int lastStart = 0;
 		for(unsigned int i = 0;i < input.size();i += codeSize){
 			unsigned int lastEnd = output.size();
@@ -1877,6 +1876,7 @@ public:
 				code2Str[i] = {lastStart, lastEnd + blockSize};
 			}
 		}
+		return true;
 	}
 };
 
