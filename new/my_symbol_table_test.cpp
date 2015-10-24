@@ -157,6 +157,10 @@ int validateSymbolTable(SymbolTable<KeyType, ValueType>& st){
 		values[i] = rand() % (count + count / 3);
 		stdMap[keys[i]] = values[i];
 		st.put(keys[i], values[i]);
+
+		auto v = st.get(keys[i]);
+		assert(nullptr != v && *v == values[i]);
+		//std::cout << "st size : " << st.size() << " std map size : " << stdMap.size() << std::endl;
 		assert(st.size() == stdMap.size());
 	}
 	assert(st.size() == stdMap.size());
@@ -509,15 +513,23 @@ int testSymbolTables(int argc, char *argv[]){
 	validateIterator(bst);
 	testRotate(bst);
 	validateIterator(bst);
+
 	RBTree<KeyType, ValueType> rbTree;
 	validateIterator(rbTree);
 	testBST(rbTree, "red black tree");
 	validateIterator(rbTree);
+
 	AVLTree<KeyType, ValueType> avlTree;
 	validateIterator(avlTree);
 	testBST(avlTree, "AVL tree");
 	validateIterator(avlTree);
-	BTreeBase<KeyType, ValueType> bTree;
+
+	int degree = rand() % 10 + 3;
+	std::cout << "degree for the BTree is : " << degree << std::endl;
+	BTreeBase<KeyType, ValueType> bTree(degree);
+	validateIterator(bTree);
+	testBST(bTree, "BTree");
+	validateIterator(bTree);
 	//doublingTestOfSymbolTable();
 	cout << "--------------end of all tests---------------" << endl;
 	return 0;
@@ -667,6 +679,7 @@ void testSparseMatrix(){
 	cout << "vec * 0.5 / (vec1 + 1.0) : " << vec << endl;
 }
 
+
 }
 int testSymbolTable(int argc, char *argv[]){
 	srand(time(0));
@@ -681,3 +694,79 @@ int testSymbolTable(int argc, char *argv[]){
 	return 0;
 }
 
+int BTreePerfTest(int argc, char *argv[]){
+	using namespace my_lib;
+	unsigned int num = argc > 1 ? atoi(argv[1]) : 6;
+	unsigned int maxValue = 3 * num;
+	unsigned int degree = num / 100;
+	if(degree * 2 > 1000) degree = 500;
+	if(degree < 3) degree = 3;
+	if (maxValue < 300) maxValue = 300;
+	BTreeBase<double, double> btree(degree);
+	for(unsigned int i = 0;i < num;++ i){
+		unsigned int n = rand() % maxValue;
+		btree.put(n, i);
+	}
+	return 0;
+}
+
+int testBTree(int argc, char *argv[]){
+	//testSymbolTables(argc, argv);
+	using namespace my_lib;
+	unsigned int num = argc > 1 ? atoi(argv[1]) : 6;
+	if(num <= 0) num = 1;
+	unsigned int maxValue = 3 * num;
+	unsigned int degree = (argc > 2 ? atoi(argv[2]) : num / 100);
+	if(degree > 1000) degree = 1000;
+	if(degree < 3) degree = 3;
+	if (maxValue < 300) maxValue = 300;
+	std::cout << "number is : " << num << ", degree is : " << degree << std::endl;
+	BTreeBase<double, double> btree(degree);
+	std::map<double, double> mp;
+	assert(btree.size() == 0);
+	for(unsigned int i = 0;i < num;++ i){
+		unsigned int k = rand() % maxValue;
+		unsigned int v = i;
+		if(argc <= 2){
+			std::swap(k, v);
+		}
+		//std::cout << "put : " << k << std::endl;
+		btree.put(k, v);
+		mp[k] = v;
+		if (rand() % 4 == 0){
+			//std::cout << "erase : " << k << std::endl;
+			//std::cout << "before remove : " << std::endl;
+			//output(btree.getRoot(), 0);
+			assert(btree.remove(k));
+			mp.erase(k);
+			//std::cout << "after remove : " << std::endl;
+			//output(btree.getRoot(), 0);
+		}
+		//std::cout << "bree size " << btree.size() << " std map size " << mp.size() << std::endl;
+		//if(btree.size() != mp.size()) output(btree.getRoot(), 0);
+		//output(btree.getRoot(), 0);
+		assert(btree.size() == mp.size());
+			
+		auto vPtr = btree.get(k);
+		assert((mp.find(k) != mp.end()) == (nullptr != vPtr));
+		assert(nullptr == vPtr || *vPtr == mp[k]);
+		assert(btree.size() == mp.size());
+		assert(mp.begin()->first == *btree.min());
+		assert((std::max_element(mp.begin(), mp.end()))->first == *btree.max());
+		assert(btree.size() == mp.size());
+		assert(btree.isValid());
+	}
+
+	//output(btree.getRoot(), 0);
+	//std::cout << "select 5 is : " << *btree.select(5) << std::endl;
+	for(auto i : btree){
+		//cout << "key : " << i.key() << " value : " << i.value() << std::endl;
+		assert(i.value() == mp[i.key()]);
+	}	
+	for(auto& kvp : mp){
+	 	auto v = btree.get(kvp.first);
+		assert(nullptr != v);
+		assert(*v == kvp.second);
+	}
+	return 0;
+}

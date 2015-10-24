@@ -39,6 +39,7 @@ public:
 	virtual unsigned int rank(const K& k) const = 0;
 
 	/**
+	 * @return the {@var index}th key in the ordered symbol table.
 	 */
 	virtual const K* select(unsigned int index) const = 0;
 
@@ -48,9 +49,7 @@ public:
 	 */
 	virtual bool removeMin(){
 		const K* k = min();
-		if(k != nullptr)
-			return remove(*k);
-		return false;
+		return nullptr == k ? false : remove(*k);
 	}
 
 	/**
@@ -59,9 +58,7 @@ public:
 	 */
 	virtual bool removeMax(){
 		const K* k = max();
-		if(k != nullptr)
-			return remove(*k);
-		return false;
+		return nullptr == k ? false : remove(*k);
 	}
 
 	unsigned int size() const override = 0;

@@ -4,9 +4,10 @@
 #include <utility>
 #include <vector>
 #include <cassert>
-//#include <iostream>
+#include <iostream>
 #include <algorithm>
 #include <memory>
+#include <exception>
 
 namespace my_lib{
 template<class K, class V, class BSTNodeTraitsParam, class C = std::less<K> > 
@@ -1444,277 +1445,639 @@ protected:
 template<class K, class V, class C = std::less<K> > 
 using AVLTree = AVLTreeBase < K, V, AVLNodeTraits<K, V, AVLNode<K, V>, AVLNodeBase<AVLNode<K, V> > >, C > ;
 
-template<class K, class V, unsigned int NUM>
+template<class NodePtr>
+void output(NodePtr node, unsigned int depth, const char *ch = " "){
+	for(unsigned int i = 0;i < depth;++ i) std::cout << ch;
+	auto count = node->childCount();
+	std::cout << node->kvpCount() << ':';
+	for(unsigned int i = 0;i < count;++ i)
+		std::cout << '(' << node->key(i) << ',' << node->value(i) << ')' << ch;
+	std::cout << std::endl;
+	if(!node->isLeaf())
+		for(unsigned int i = 0;i <= count;++ i) output(node->child(i), depth + 1, ch);
+}
+
+template<class K, class V, class KVPArray = std::vector<std::pair<K, V> > >
 class BTreeNode{
 public:
-	BTreeNode() : n(0), parent(nullptr){
+	BTreeNode(){
 	}
-	BTreeNode(const K& k, const V& v){
-		new(keys)K(k);
-		new(values)V(v);
-		children[0] = children[1] = nullptr;
-		parent = nullptr;
-		n = 1;
+	BTreeNode(const BTreeNode&) = delete;
+	BTreeNode& operator=(const BTreeNode&) = delete;
+	
+	size_t childCount() const {
+		return items.size();
 	}
-	BTreeNode(const BTreeNode& node, unsigned int start, unsigned int count, BTreeNode *p){
-		unsigned int end = start + count;
-		for(n = 0;n < N && start < end;++ n){
-			new(&keys[n * sizeof(K)])K(node.keys[start]);
-			new(&values[n * sizeof(V)])V(node.values[start]);
-			children[n] = p->children[start];
-		}
-		children[n] = p->children[start];
-		parent = p;
-	}
-	BTreeNode* split(unsigned int n1, unsigned int index){
-		assert(n1 + 1 < n);
-		if(n1 > 0 && n1 + 1 < n){
-			if(parent == nullptr){
-				parent = new BTreeNode(*this, n1, 1, parent);
-				parent->children[0] =this;
-				index = 0;
-			}else{
-				assert(parent->n < N);
-				assert(parent->children[index] == this);
-				if(parent->children[index] != this)
-					return nullptr;
-				parent->insert(((K*)keys)[n1], ((V*)values)[n1], index);
-			}
-			parent->children[index + 1] = new BTreeNode(*this, n1 + 1, n - n1 - 1, parent);
-			std::for_each(((K*)keys) + n1, ((K*)keys) + n, [](K& k){k.~K();});
-			std::for_each(((V*)values) + n1, ((V*)values) + n, [](V& v){v.~V();});
-			this->n = n1;
-		}
-		return parent;
-	}
-	BTreeNode* safeSplit(unsigned int index){
-		if(n >= N)
-			return split(n - 2, index);
-		return this;
-	}
-	unsigned int getCount(){
-		return n;
-	}
-	bool insert(const K&k, const V& v, unsigned int index){
-		assert(n < N);
-		assert(index < N);
-		if(n >= N)
-			return false;
-		//std::copy_backward((K*)keys + index, (K*)keys + n, (K*)keys + n + 1);
-		//std::copy_backward((V*)values + index, (V*)values + n, (V*)values + n + 1);
-		//std::copy_backward(children + index + 1, children + n + 1, children + n + 2);
 
-		children[index + 1] = nullptr;
-		((K*)keys)[index] = k;
-		((V*)values)[index] = v;
-		++n;
-		return true;
-		
+	size_t itemsCount() const {
+		return items.size();
 	}
-	K* getKeys(){
-		return (K*)keys;
+
+	size_t kvpCount() const {
+		return count;
 	}
-	V* getValues(){
-		return (V*)values;
-	}
-	const K* getKeys() const {
-		return (const K*)keys;
-	}
-	const V* getValues() const {
-		return (const V*)values;
-	}
-	BTreeNode * const *getChildren() const {
-		return children;
-	}
+
 	bool isLeaf() const {
-		return std::all_of(children, children + n, 
-			[](BTreeNode *p){return p == nullptr;});
+		return nullptr == children;
 	}
+
+	template<class NodeTraits>
+	const V* get(const K& k, NodeTraits traits) const {
+		auto node = getNode(k, traits);
+		return nullptr == node.first || static_cast<size_t>(-1) == node.second ? 
+			nullptr : &node.first->items[node.second].second;
+	}
+
+	const BTreeNode* child(size_t index) const {
+		return nullptr == children || index > items.size() ? nullptr : children[index];
+	}
+
+	const K& key(size_t index) const {
+		return items[index].first;
+	}
+
+	const V& value(size_t index) const{
+		return items[index]. second;
+	}
+
+	const K* min() const {
+		if(items.size() == 0) return nullptr;
+		if(nullptr == children) return &key(0);
+		return children[0]->min();
+	}
+
+	const BTreeNode* minNode() const {
+		if(nullptr == children) return this;
+		return children[0]->minNode();
+	}
+
+	const K* max() const{
+		if(items.size() == 0) return nullptr;
+		if(nullptr == children) return &key(items.size() - 1);
+		return children[items.size()]->max();
+	}
+
+	const BTreeNode* maxNode() const {
+		if(nullptr == children) return this;
+		return children[items.size()]->max();
+	}
+
+	template<class NodeTraits>
+	static const K* floor(const BTreeNode* node, const K& k, NodeTraits traits) {
+		auto pos = std::lower_bound(node->items.begin(), node->items.end(), k, traits);
+		size_t index = pos - node->items.begin();
+		if(pos != node->items.end() && !traits(k, *pos)) return &pos->first;
+		if(nullptr != node->children) return floor(node->children[index], k, traits);
+		if(0 == index) return nullptr;
+	 	return &node->key(index - 1);
+	}
+	
+	template<class NodeTraits>
+	static const K* ceil(const BTreeNode* node, const K& k, NodeTraits traits) {
+		auto pos = std::lower_bound(node->items.begin(), node->items.end(), k, traits);
+		size_t index = pos - node->items.begin();
+		if(pos != node->items.end() && !traits(k, *pos)) return &pos->first;
+		if(nullptr != node->children) return ceil(node->children[index + 1], k, traits);
+		if(pos == node->items.end()) return nullptr;
+		return &pos->first;
+	}
+	
+	template<class NodeTraits>
+	static unsigned int rank(const BTreeNode* node, const K& k, NodeTraits traits) {
+		auto pos = std::lower_bound(node->items.begin(), node->items.end(), k, traits);
+		size_t index = pos - node->items.begin();
+		unsigned int sum = index;
+		if(nullptr != node->children){
+			for(size_t i = 0;i < index;++ i) sum += node->children[i]->count;
+			sum += rank(node->children[index], k, traits);
+		}
+		return sum;
+	}
+
+	template<class NodeTraits>
+	static const K* select(const BTreeNode* node, size_t index, NodeTraits traits) {
+		if(index >= node->count) return nullptr;
+		if(nullptr == node->children) return &node->key(index);
+		for(size_t i = 0;i <= node->childCount();++ i){
+			size_t sz = node->child(i)->count;
+			//std::cout << "index is " << index << " sz is " << sz << std::endl;
+			if(index == sz) return &node->key(i);
+			if(index < sz) return select(node->child(i), index, traits);
+			index -= (sz + 1);
+		}
+		return nullptr;
+	}	
+
 	~BTreeNode(){
-		std::for_each(((K*)keys), ((K*)keys) + n, [](K& k){k.~K();});
-		std::for_each(((V*)values), ((V*)values) + n, [](V& v){v.~V();});
+		if(nullptr != children && count > 0){
+			for(size_t i = 0;i <= items.size();++ i)
+				delete children[i];
+		}
+		delete[] children;
 	}
-	static const unsigned int N = NUM;
+
+	template<class Stream>
+	Stream& printID(Stream& stream) const {
+		if(items.size() > 0) stream << items[0].first;
+		return stream << "....";
+	}
+
+	template<class NodeTraits>
+	bool isSizeValid(NodeTraits traits) const {
+			size_t sz = childCount();
+			if(sz < traits.num() - 1){
+				printID(std::cout) << " : size less than " << traits.num() - 1 << std::endl;
+				return false;
+			}
+			if(sz >= 2 * traits.num()){
+				printID(std::cout) << " : size not less than " << 2 * traits.num() << std::endl;
+			 	return false;
+			}
+			return true;
+	}
+
+	template<class NodeTraits>
+	bool isValid(NodeTraits traits) const {
+		for(size_t i = 1;i < items.size();++ i)
+			if (!traits(items[i - 1], items[i])){
+				printID(std::cout) << " : " << i << "th key not in order" << std::endl;
+			 	return false;
+			}
+		size_t sum = items.size();
+		if(nullptr != children){
+			for(size_t i = 0;i <= items.size();++ i){
+				if(!children[i]->isSizeValid(traits) || !children[i]->isValid(traits)) return false;
+				sum += children[i]->count;
+			}
+			for(size_t i = 0;i < items.size();++ i){
+				if(!traits(*children[i]->max(), items[i])){
+					printID(std::cout) << " : " << i << "th key less than left child's max" << std::endl;
+				 	return false;
+				}
+				if(!traits(items[i], *children[i + 1]->min())){
+					printID(std::cout) << " : " << i << "th key not less than right child's min" << std::endl;
+				 	return false;
+				}
+			}
+		}
+
+		if(sum != count){
+			printID(std::cout) << "recorded k-v size is : " << count <<  "but actual size is : " << sum << std::endl;
+			return false;
+		}
+		return true;
+	}
+
+	template<class NodeTraits>
+	static BTreeNode* put(BTreeNode* root, const K& k, const V& v, NodeTraits traits){
+		// Enforce that the number of children for a BTreeNode must be at least 3
+		if(traits.num() <= 2) return nullptr;
+		BTreeNode* newNode = root->put(k, v, traits);
+		if(nullptr != newNode && newNode != root){
+			auto ret = new BTreeNode;
+			ret->children = new BTreeNode*[2 * traits.num()];
+			ret->items.push_back(root->items.back());
+			root->items.pop_back();
+			ret->children[0] = root;
+			ret->children[1] = newNode;
+			ret->count = root->count + newNode->count + 1;
+			root = ret;
+		}
+		return root;
+	}
+
+	template<class NodeTraits>
+	static BTreeNode* copy(BTreeNode* node, NodeTraits traits){
+		if(nullptr == node) return nullptr;
+		return new BTreeNode(*node, traits);
+	}
+
+	template<class NodeTraits>
+	static bool remove(BTreeNode*& node, const K& k, NodeTraits traits){
+		if(removeInner(node, k, traits)){
+			while(node->childCount() == 0){
+				if(nullptr == node->children){
+					node = nullptr;
+					break;
+				}
+
+				BTreeNode* toDelete = node;
+				node = node->children[0];
+
+				//avoid child link being deleted.
+				toDelete->count = 0;
+				delete toDelete;
+			}
+			return true;
+		}
+		return false;
+	}
 private:
-	static_assert(NUM > 2, "number of nodes in a BTree must be greater than 2");
-	char keys[N * sizeof(K)];
-	char values[N * sizeof(V)];
-	BTreeNode *children[N + 1];	
-	BTreeNode *parent;
-	unsigned int n;
+	/*
+	 * Merge the {@param index}-th child and {@param index + 1}-th child 
+	 * 	and the key at {@param index} into one node.
+	 * Assuming that both the left and right child have {@value num - 1} keys.
+	 * */
+	template<class NodeTraits>
+	BTreeNode* mergeAt(size_t index, NodeTraits traits){
+		BTreeNode* lc = children[index];
+		BTreeNode* rc = children[index + 1];
+		assert(lc->items.size() == traits.num() - 1);
+		assert(rc->items.size() == traits.num() - 1);
+
+		// adjust children's link first
+		for(size_t i = index + 1;i < items.size();++ i) children[i] = children[i + 1];
+		if(nullptr != lc->children){
+			assert(nullptr != rc->children);
+
+			std::copy(rc->children, rc->children + rc->items.size() + 1, 
+				lc->children + lc->items.size() + 1);
+		}
+
+		//move items after link is adjusted.
+		lc->items.push_back(items[index]);
+		items.erase(items.begin() + index);
+		lc->items.insert(lc->items.end(), rc->items.begin(), rc->items.end());
+		
+		//adjust counts
+		lc->count += (rc->count + 1);
+		assert(lc->items.size() == 2 * traits.num() - 1);
+
+		//avoiding child link being destructed
+		rc->items.clear();
+		rc->count = 0;
+		delete rc;
+		return lc;
+	}
+
+	/*
+	 * Insert the {@var index}-th key to the first key of the {@param index + 1}-th child
+	 * And move the last key of {@var index}-th child to the {@param index)-th key.
+	 * */
+	template<class NodeTraits>
+	BTreeNode* l2r(size_t index, NodeTraits traits){
+		BTreeNode* lc = children[index];
+		BTreeNode* rc = children[index + 1];
+		if(nullptr != rc->children){
+			assert(nullptr != lc->children);
+			for(size_t i = rc->items.size() + 1;i > 0;-- i) rc->children[i] = rc->children[i - 1];
+			rc->children[0] = lc->children[lc->items.size()];
+		}
+
+		rc->items.insert(rc->items.begin(), items[index]);
+		items[index] = lc->items.back();
+		lc->items.pop_back();
+
+		if(nullptr != rc->children){
+			assert(nullptr != lc->children);
+			lc->count -= (rc->children[0]->count + 1);
+			rc->count += (rc->children[0]->count + 1);
+		}else{
+			assert(nullptr == lc->children);
+			-- lc->count;
+			++ rc->count;
+		}
+		return lc;
+	}
+
+	/*
+	 * Insert the {@var index}-th key to the first key of the {@param index + 1}-th child
+	 * And move the last key of {@var index}-th child to the {@param index)-th key.
+	 * */
+	template<class NodeTraits>
+	BTreeNode* r2l(size_t index, NodeTraits traits){
+		BTreeNode* lc = children[index];
+		BTreeNode* rc = children[index + 1];
+		if(nullptr != lc->children){
+			assert(nullptr != rc->children);
+			lc->children[lc->items.size() + 1] = rc->children[0];
+			for(size_t i = 0;i < rc->items.size();++ i) rc->children[i] = rc->children[i + 1];
+		}
+
+		lc->items.push_back(items[index]);
+		items[index] = *rc->items.begin();
+		rc->items.erase(rc->items.begin());
+
+		if(nullptr != lc->children){
+			assert(nullptr != rc->children);
+			rc->count -= (lc->children[lc->items.size()]->count + 1);
+			lc->count += (lc->children[lc->items.size()]->count + 1);
+		}else{
+			assert(nullptr == rc->children);
+			-- rc->count;
+			++ lc->count;
+		}
+		return lc;
+	}
+
+	template<class NodeTraits>
+	BTreeNode* ensureNum(size_t index, NodeTraits traits){
+		BTreeNode* next = children[index];
+		if(next->items.size() < traits.num()){
+			if(index == items.size()){
+				BTreeNode* sibling = children[index - 1];
+				if(sibling->items.size() < traits.num()){
+					next = mergeAt(index - 1, traits);
+				}else{
+					l2r(index - 1, traits);
+				}
+			}else{
+				BTreeNode* sibling = children[index + 1];
+				if(sibling->items.size() < traits.num()){
+					next = mergeAt(index, traits);
+				}else{
+					r2l(index, traits);
+				}
+			}
+		}
+		assert(next->items.size() >= traits.num());
+		return next;
+	}
+
+	template<class NodeTraits>
+	static bool removeInner(BTreeNode* node, const K& k, NodeTraits traits){
+		auto pos = std::lower_bound(node->items.begin(), node->items.end(), k, traits);
+		size_t index = pos - node->items.begin();
+		if(pos != node->items.end() && !traits(k, *pos)){
+			return node->removeAt(index, traits);
+		}
+		//output(node, 0);
+		if(removeInner(node->ensureNum(index, traits), k, traits)){
+			//pintID(std::cout);
+			--node->count;
+			return true;
+		}
+		return false;
+	}
+
+	template<class NodeTraits>
+	BTreeNode(const BTreeNode& node, NodeTraits traits){
+		items = node.items;
+		count = node.count;
+		children = new BTreeNode*[traits.num() * 2];
+		for(size_t i = 0;i <= items.size();++ i) children[i] = new BTreeNode(*node.children[i], traits);
+	}
+
+	template<class NodeTraits>
+	bool removeAt(size_t index, NodeTraits traits){
+		if(index >= items.size()) return false;
+		--count;
+		if(nullptr == children){
+			items.erase(items.begin() + index);
+		}else{
+			auto lc = children[index], rc = children[index + 1];
+			size_t ls = lc->items.size(), rs = rc->items.size();
+			if(ls < traits.num() && rs < traits.num()){
+				return mergeAt(index, traits)->removeAt(traits.num() - 1, traits);
+			}else if(ls >= rs){
+				items[index] = lc->maxNode()->items.back();
+				return removeInner(lc, items[index].first, traits);
+			}else{
+				items[index] = rc->minNode()->items[0];
+				return removeInner(rc, items[index].first, traits);
+			}
+		}
+		return true;
+	}
+
+	BTreeNode* maxNode(){
+		if(nullptr == children) return this;
+		return children[items.size()]->maxNode();
+	}
+
+	BTreeNode* minNode(){
+		if(nullptr == children) return this;
+		return children[0]->minNode();
+	}
+
+	template<class NodeTraits>
+	std::pair<const BTreeNode*, size_t> getNode(const K& k, NodeTraits traits) const {
+		auto pos = std::lower_bound(items.begin(), items.end(), k, traits);
+		size_t index = pos - items.begin();
+		if(pos != items.end() && !traits(k, *pos)) return {this, index};
+		if(nullptr == children) return {nullptr, static_cast<size_t>(-1)};
+	 	return children[index]->getNode(k, traits);
+	}
+
+	template<class NodeTraits, class Iterator>
+	inline BTreeNode* insertItem(Iterator pos, const K& k, const V& v, NodeTraits traits){
+			if(items.size() >= 2 * traits.num() - 1){
+				BTreeNode* ret = new BTreeNode;
+				auto& retItems = ret->items;
+				if(static_cast<size_t>(pos - items.begin()) >= traits.num()){
+					retItems.insert(retItems.end(), items.begin() + traits.num(), pos);
+					retItems.push_back({k, v});
+					retItems.insert(retItems.end(), pos, items.end());
+					items.resize(traits.num());
+				}else{
+					retItems.insert(retItems.end(), items.begin() + traits.num() - 1, items.end());
+					items.resize(traits.num() - 1);
+					items.insert(pos, {k, v});
+				}
+				this->count = traits.num() - 1;
+				ret->count = traits.num();
+				assert(this->items.size() == traits.num());
+				assert(ret->items.size() == traits.num());
+				return ret;
+			}else{
+				items.insert(pos, {k, v});
+				++count;
+			}
+			return this;
+	}
+
+	template<class NodeTraits>
+	BTreeNode* put(const K& k, const V& v, NodeTraits traits){
+		//printID(std::cout) << " put: " << k << ", " << v << std::endl;
+		auto pos = std::lower_bound(items.begin(), items.end(), k, traits);
+		if(pos != items.end() && !traits(k, *pos)){
+			//printID(std::cout) << " previous value is : " << pos->second << std::endl;
+			pos->second = v;
+		 	return nullptr;
+		}
+		if(nullptr != children){
+			//printID(std::cout) << " internal node : " << children << std::endl;
+			size_t index = pos - items.begin();
+			auto child = children[index];
+			auto newNode = child->put(k, v, traits);
+			// child->printID(std::cout << "child ") << std::endl;
+			if(nullptr == newNode) return nullptr;
+			if(newNode == child){
+				++ count;
+			 	return this;
+			}
+			// newNode->printID(std::cout << "new ") << std::endl;
+
+			BTreeNode* ret = insertItem(pos, child->items.back().first, 
+				child->items.back().second, traits);
+			child->items.pop_back();
+			if(this != ret){
+				ret->children = new BTreeNode*[2 * traits.num()];
+				if(index == 2 * traits.num() - 1){
+					ret->children[traits.num()] = newNode;
+				}else{
+					ret->children[traits.num()] = children[2 * traits.num() - 1];
+					for(size_t i = 2 * traits.num() - 1;i > index + 1;-- i) children[i] = children[i - 1];
+					children[index + 1] = newNode;
+				}
+				std::copy(children + traits.num(), children + 2 * traits.num(), ret->children);
+				for(size_t i = 0;i < traits.num();++ i) this->count += this->children[i]->count;
+				for(size_t i = 0;i <= traits.num();++ i) ret->count += ret->children[i]->count;
+			}else{
+				for(size_t i = items.size();i > index + 1;-- i) children[i] = children[i - 1];
+				children[index + 1] = newNode;
+			}
+			return ret;
+		}
+
+		// printID(std::cout << "leaf node ") << std::endl;
+		return insertItem(pos, k, v, traits);
+	}
+
+	KVPArray items;
+	BTreeNode **children = nullptr;
+	size_t count = 0;
 };
 
 template<class K, class V, class C = std::less<K> >
 class BTreeBase : public OrderedSymbolTable<K, V>{
 	typedef OrderedSymbolTable<K, V> Super;
 public:
-	//typedef BNodeTraitsParam BSTNodeTraits;
-	typedef BTreeNode<K, V, 5> Node;
+	BTreeBase(unsigned int num, const C& comparator = C()) : traits(num, comparator){
+		if(num < 3) throw std::invalid_argument("degree must be greater than 2 ");
+	}
+	BTreeBase(const BTreeBase& tree){
+		traits = tree.traits;
+		root = Node::copy(tree.root, traits);
+	}
+	BTreeBase& operator=(const BTreeBase&) = delete;
+
+	static const int NUM = 6;
+	typedef BTreeNode<K, V> Node;
 	typedef Node* NodePtr;
 	
 	void put(const K& k, const V& v) override {
-		if(root == NodePtr()){
-			root = new Node(k, v);
-			return;
-		}
-		NodePtr node = root;
-		unsigned int index = 0;
-		while(true){
-			node = node->safeSplit(index);
+		if (NodePtr() == root) root = new Node;
+		root = Node::put(root, k, v, traits);
+		//assert(root->isValid(traits));
+	}
 
-			const K* keys = node->getKeys();
-			unsigned int count = node->getCount();
-			index = std::lower_bound(keys, keys + count, k, comparator) - keys;
-			assert(count > 0 && count < Node::N);
-			if(index < count && !comparator(k, keys[index]))
-					return;
-			
-			auto children = node->getChildren();
-			if(children[index] == NodePtr()){
-				assert(node->isLeaf());
-				node->insert(k, v, index);				
-				break;
-			}
-			node = children[index];
-		}
+	const Node* getRoot() const {
+		return root;
 	}
 
 	const V* get(const K& k) const override {
-		NodePtr node = root;
-		while(node != NodePtr()){
-			auto keys = node->getKeys();
-			auto count = node->getCount();
-			unsigned int index = std::lower_bound(keys, keys + count, k, comparator) - keys;
-			assert(count > 0 && count < Node::N);
-			if(index < count && !comparator(k, keys[index]))
-					return node->getValues() + index;
-			node = node->getChildren()[index];
-		}
-		return nullptr;
+		return NodePtr() == root ? nullptr : root->get(k, traits);
 	}
 
 	bool remove(const K& k) override {
-		return false;
+		if(NodePtr() == root) return false;
+		return Node::remove(root, k, traits);
 	}
 
 	unsigned int size() const override {
-		if(root == NodePtr()){
-			return 0;
-		}
-		return 0;
+		return NodePtr() == root ? 0 : root->kvpCount();
 	}
 
 	void clear() override {
+		delete root;
+		root = NodePtr();
 	}
 
 	const K* min() const override {
-		if(root == NodePtr())
-			return nullptr;
-		NodePtr node = root;
-		const K* minKey = nullptr;
-		while(node ){
-			auto count = node->getCount();
-			minKey = &node->getKeys()[0];
-			assert(count > 0 && count < Node::N);
-			node = node->getChildren()[0];
-		}
-		return minKey;
+		return NodePtr() == root ? nullptr : root->min();
 	}
 	
 	const K* max() const override {
-		if(root == NodePtr())
-			return nullptr;
-		NodePtr node = root;
-		const K* maxKey = nullptr;
-		while(node ){
-			auto count = node->getCount();
-			maxKey = &node->getKeys()[count - 1];
-			assert(count > 0 && count < Node::N);
-			node = node->getChildren()[count - 1];
-		}
-		return maxKey;
+		return NodePtr() == root ? nullptr : root->max();
 	}
 
 	const K* floor(const K& k) const override {
-		const K* key = nullptr;
-		auto node = root;
-		while(node != NodePtr()){
-			auto keys = node->getKeys();
-			auto count = node->getCount();
-			unsigned int index = std::lower_bound(keys, keys + count, k, comparator) - keys;
-			if(index > 0)
-				key = &keys[index - 1];
-			if(index < count && !comparator(k, keys[index]))
-				return &keys[index];
-			node = node->getChildren()[index];
-		}
-		return key;
+		return NodePtr() == root ? nullptr : Node::floor(root, k, traits);
 	}
 	
 	const K* ceil(const K& k) const override {
-		const K* key = nullptr;
-		auto node = root;
-		while(node != NodePtr()){
-			auto keys = node->getKeys();
-			auto count = node->getCount();
-			unsigned int index = std::lower_bound(keys, keys + count, k, comparator) - keys;
-			if(index < count){
-			        if(!comparator(k, keys[index]))
-					return &keys[index];
-				key = &keys[index];
-			}
-			node = node->getChildren()[index];
-		}
-		return key;
+		return NodePtr() == root ? nullptr : Node::ceil(root, k, traits);
 	}
 	
 	unsigned int rank(const K& k) const override {
-		return 0;
+		return NodePtr() == root ? 0 : Node::rank(root, k, traits);
 	}
 
 	const K* select(unsigned int index) const override {
-		return nullptr;
+		return NodePtr() == root ? nullptr : Node::select(root, index, traits);
 	}	
-
-	bool removeMin() override {
-		const K* k = min();
-		if(k != nullptr)
-			return remove(*k);
-		return false;
-	}
-
-	bool removeMax() override {
-		const K* k = max();
-		if(k != nullptr)
-			return remove(*k);
-		return false;
-	}
 
 	unsigned int size(const K& l, const K& h) const override {
 		unsigned int i = rank(l), j = rank(h);
-		if(i > j)
-			return 0;
-		if(get(h) != nullptr)
-			return j - i + 1;
-		return j - i;
+		return i > j ? 0 : (nullptr != get(h) ? j - i + 1 : j - i);
 	}	
 
 	virtual bool isValid() const{
-		return true;
+		return NodePtr() == root || root->isValid(traits);
 	}
+
+	~BTreeBase(){ delete root;}
 protected:
+	struct BTreeIterator : public Super::IteratorImpl{
+		unsigned int index;
+		const BTreeBase* tree;
+
+		BTreeIterator(unsigned int index, const BTreeBase* tree) : index(index), tree(tree){}
+
+		virtual void next() override{
+			++index;
+		}
+
+		virtual bool equals(const typename Super::IteratorImpl& i) const override {
+			const BTreeIterator* itor = dynamic_cast<const BTreeIterator*>(&i);
+			return nullptr != itor && itor->index == index && itor->tree == tree;
+		}
+
+		virtual void assign(const typename Super::IteratorImpl& i) {
+			const BTreeIterator* itor = dynamic_cast<const BTreeIterator*>(&i);
+			if(nullptr != itor){
+				index = itor->index;
+				tree = itor->tree;
+			}
+		}
+
+		virtual const K& key() const {
+			return *tree->select(index);
+		}
+
+		virtual const V& value() const {
+			return *tree->get(key());
+		}
+
+		virtual typename Super::IteratorImpl* copy() const {
+			return new BTreeIterator(index, tree);
+		}
+	};
 	typename Super::IteratorImpl *implBegin() const override{
-		return nullptr;
+		return new BTreeIterator(0, this);
 	}
 
 	typename Super::IteratorImpl *implEnd() const override{
-		return nullptr;
+		return new BTreeIterator(size(), this);
 	}	
 private:
-	NodePtr root;
-	C comparator;
-
+	NodePtr root = NodePtr();
+	struct NodeTraits{
+		size_t n = 0;
+		C comparator;
+		NodeTraits (size_t n = NUM, const C& comparator = C()) : n(n), comparator(comparator){}
+		size_t num(){return n;}
+		bool operator()(const std::pair<K, V>& kvp1, const std::pair<K, V>& kvp2){
+			return kvp1.first < kvp2.first;
+		}
+		bool operator()(const K& k, const std::pair<K, V>& kvp){
+			return k < kvp.first;
+		}
+		bool operator()(const std::pair<K, V>& kvp, const K& k){
+			return kvp.first < k;
+		}
+	}traits;
 };
-
 }
 #endif //MY_BINARY_SEARCH_TREE_H
