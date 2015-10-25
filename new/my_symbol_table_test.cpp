@@ -124,6 +124,8 @@ void fillSymbolTable(SymbolTable<KeyType, ValueType>& st){
 		st.put(values[i], values[i + 1]);
 	}
 }
+
+thread_local unsigned int defaultCount = 1000;
 int validateSymbolTable(SymbolTable<KeyType, ValueType>& st){
 	std::cout << "test symbol table" << std::endl;
 	const ValueType *ret = nullptr;
@@ -148,11 +150,11 @@ int validateSymbolTable(SymbolTable<KeyType, ValueType>& st){
 	StdMap stdMap;
 	std::vector<KeyType> keys;
 	std::vector<ValueType> values;
-	auto count = 1000;
+	auto count = defaultCount;
 
 	keys.resize(count);
 	values.resize(count);
-	for(auto i = 0;i < count;++ i){
+	for(decltype(count) i = 0;i < count;++ i){
 		keys[i] = rand() % (count + count / 3);
 		values[i] = rand() % (count + count / 3);
 		stdMap[keys[i]] = values[i];
@@ -164,22 +166,22 @@ int validateSymbolTable(SymbolTable<KeyType, ValueType>& st){
 		assert(st.size() == stdMap.size());
 	}
 	assert(st.size() == stdMap.size());
-	for(int i = 0;i < count;++ i){
+	for(decltype(count) i = 0;i < count;++ i){
 		assert(*st.get(keys[i]) == stdMap[keys[i]]);
 	}
 	assert(st.get(count * 2) == nullptr);
-	for(int i = 0;i < count / 10;++ i){
+	for(decltype(count) i = 0;i < count / 10;++ i){
 		assert((stdMap.find(keys[i]) != stdMap.end()) == st.remove(keys[i]));
 		stdMap.erase(keys[i]);
 		assert(st.size() == stdMap.size());
 	}
 	assert(st.size() == stdMap.size());
-	for(int i = 0;i < count / 10;++ i){
+	for(decltype(count) i = 0;i < count / 10;++ i){
 		assert(st.get(keys[i]) == nullptr);
 		assert(!st.remove(keys[i]));
 		assert(st.size() == stdMap.size());
 	}
-	for(int i = 0;i < count;++ i){
+	for(decltype(count) i = 0;i < count;++ i){
 		if(stdMap.find(keys[i]) != stdMap.end()){
 			assert(*st.get(keys[i]) == stdMap[keys[i]]);
 		}else{
@@ -246,9 +248,14 @@ void testRotate(T& t){
 
 template<class T>
 void moreOrderedTest(T& ost){
-	const unsigned int count = 100;
-	double nums[count];
-	unsigned int indices[count];
+	const unsigned int count = defaultCount;
+	std::vector<double> numsVec;
+	std::vector<unsigned int> indicesVec;
+	numsVec.resize(count);
+	indicesVec.resize(count);
+
+	double* nums = &numsVec[0];
+	unsigned int* indices = &indicesVec[0];
 	for(unsigned int i = 0;i < count;++ i){
 		nums[i] = i;
 		indices[i] = i;
@@ -263,8 +270,8 @@ void moreOrderedTest(T& ost){
 		assert(ost.isValid());
 	}
 	{
-		T tmp(ost);
-		assert(tmp.isValid());
+		/*T tmp(ost);
+		assert(tmp.isValid());*/
 	}
 
 	for(unsigned int i = 0;i < count;++ i){
@@ -310,10 +317,10 @@ void moreOrderedTest(T& ost){
 		}
 	}
 
-	{
+	/*{
 		T tmp(ost);
 		assert(tmp.isValid());
-	}
+	}*/
 
 	cout << "test : min, removeMin" << endl;
 	const int toRemove = 5;
@@ -324,10 +331,10 @@ void moreOrderedTest(T& ost){
 		assert(!ost.contains(nums[i]));
 	}
 
-	{
+	/*{
 		T tmp(ost);
 		assert(tmp.isValid());
-	}
+	}*/
 	
 
 	cout << "test : contains" << endl;
@@ -369,10 +376,10 @@ void moreOrderedTest(T& ost){
 		ost.put(i.key(), 2 * i.key());
 		assert(*ost.get(i.key()) == i.key() * 2);
 	}
-	{
+	/*{
 		T tmp(ost);
 		assert(tmp.isValid());
-	}
+	}*/
 }
 int validateIterator(const SymbolTable<KeyType, ValueType>& st){
 	cout << "validate iterator" << endl;
@@ -528,6 +535,7 @@ int testSymbolTables(int argc, char *argv[]){
 	std::cout << "degree for the BTree is : " << degree << std::endl;
 	BTreeBase<KeyType, ValueType> bTree(degree);
 	validateIterator(bTree);
+	defaultCount = 10000;
 	testBST(bTree, "BTree");
 	validateIterator(bTree);
 	//doublingTestOfSymbolTable();
@@ -711,7 +719,7 @@ int BTreePerfTest(int argc, char *argv[]){
 }
 
 int testBTree(int argc, char *argv[]){
-	//testSymbolTables(argc, argv);
+	testSymbolTable(argc, argv);
 	using namespace my_lib;
 	unsigned int num = argc > 1 ? atoi(argv[1]) : 6;
 	if(num <= 0) num = 1;

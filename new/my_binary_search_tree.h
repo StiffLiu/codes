@@ -1506,6 +1506,22 @@ public:
 		return children[0]->min();
 	}
 
+	template<class NodeTraits>
+	void removeMin(NodeTraits traits) {
+		if(count == 0) return;
+		if(nullptr == children) items.erase(items.begin());
+		else ensureNum(0, traits)->removeMin(traits);
+		--count;
+	}
+
+	template<class NodeTraits>
+	void removeMax(NodeTraits traits) {
+		if(count == 0) return;
+		if(nullptr == children) items.pop_back();
+		else ensureNum(items.size(), traits)->removeMax(traits);
+		--count;
+	}
+
 	const BTreeNode* minNode() const {
 		if(nullptr == children) return this;
 		return children[0]->minNode();
@@ -1527,7 +1543,10 @@ public:
 		auto pos = std::lower_bound(node->items.begin(), node->items.end(), k, traits);
 		size_t index = pos - node->items.begin();
 		if(pos != node->items.end() && !traits(k, *pos)) return &pos->first;
-		if(nullptr != node->children) return floor(node->children[index], k, traits);
+		if(nullptr != node->children){
+		 	auto ret = floor(node->children[index], k, traits);
+			if(nullptr != ret) return ret;
+		}
 		if(0 == index) return nullptr;
 	 	return &node->key(index - 1);
 	}
@@ -1537,7 +1556,11 @@ public:
 		auto pos = std::lower_bound(node->items.begin(), node->items.end(), k, traits);
 		size_t index = pos - node->items.begin();
 		if(pos != node->items.end() && !traits(k, *pos)) return &pos->first;
-		if(nullptr != node->children) return ceil(node->children[index + 1], k, traits);
+		if(nullptr != node->children){
+		 	auto ret = ceil(node->children[index], k, traits);
+			if(nullptr != ret) return ret;
+		}
+
 		if(pos == node->items.end()) return nullptr;
 		return &pos->first;
 	}
@@ -1772,26 +1795,18 @@ private:
 
 	template<class NodeTraits>
 	BTreeNode* ensureNum(size_t index, NodeTraits traits){
-		BTreeNode* next = children[index];
-		if(next->items.size() < traits.num()){
-			if(index == items.size()){
-				BTreeNode* sibling = children[index - 1];
-				if(sibling->items.size() < traits.num()){
-					next = mergeAt(index - 1, traits);
-				}else{
-					l2r(index - 1, traits);
-				}
-			}else{
-				BTreeNode* sibling = children[index + 1];
-				if(sibling->items.size() < traits.num()){
-					next = mergeAt(index, traits);
-				}else{
-					r2l(index, traits);
-				}
-			}
+		BTreeNode* lc = children[index];
+		if(lc->items.size() >= traits.num()) return lc;
+		if(index == items.size()){
+				--index;
+				if(children[index]->items.size() < traits.num()) return mergeAt(index, traits);
+				l2r(index, traits);
+		}else{
+				if(children[index + 1]->items.size() < traits.num()) return mergeAt(index, traits);
+				r2l(index, traits);
 		}
-		assert(next->items.size() >= traits.num());
-		return next;
+		assert(lc->items.size() >= traits.num());
+		return lc;
 	}
 
 	template<class NodeTraits>
@@ -1802,7 +1817,7 @@ private:
 			return node->removeAt(index, traits);
 		}
 		//output(node, 0);
-		if(removeInner(node->ensureNum(index, traits), k, traits)){
+		if(nullptr != node->children && removeInner(node->ensureNum(index, traits), k, traits)){
 			//pintID(std::cout);
 			--node->count;
 			return true;
@@ -1831,10 +1846,10 @@ private:
 				return mergeAt(index, traits)->removeAt(traits.num() - 1, traits);
 			}else if(ls >= rs){
 				items[index] = lc->maxNode()->items.back();
-				return removeInner(lc, items[index].first, traits);
+				lc->removeMax(traits);
 			}else{
 				items[index] = rc->minNode()->items[0];
-				return removeInner(rc, items[index].first, traits);
+				rc->removeMin(traits);
 			}
 		}
 		return true;
@@ -2013,8 +2028,20 @@ public:
 		return i > j ? 0 : (nullptr != get(h) ? j - i + 1 : j - i);
 	}	
 
-	virtual bool isValid() const{
+	bool isValid() const override {
 		return NodePtr() == root || root->isValid(traits);
+	}
+
+	bool removeMin() override {
+		if(NodePtr() == root) return false;
+		root->removeMin(traits);
+		return true;
+	}
+
+	bool removeMax() override {
+		if(NodePtr() == root) return false;
+		root->removeMax(traits);
+		return true;
 	}
 
 	~BTreeBase(){ delete root;}
