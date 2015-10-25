@@ -270,8 +270,8 @@ void moreOrderedTest(T& ost){
 		assert(ost.isValid());
 	}
 	{
-		/*T tmp(ost);
-		assert(tmp.isValid());*/
+		T tmp(ost);
+		assert(tmp.isValid());
 	}
 
 	for(unsigned int i = 0;i < count;++ i){
@@ -317,10 +317,10 @@ void moreOrderedTest(T& ost){
 		}
 	}
 
-	/*{
+	{
 		T tmp(ost);
 		assert(tmp.isValid());
-	}*/
+	}
 
 	cout << "test : min, removeMin" << endl;
 	const int toRemove = 5;
@@ -331,10 +331,10 @@ void moreOrderedTest(T& ost){
 		assert(!ost.contains(nums[i]));
 	}
 
-	/*{
+	{
 		T tmp(ost);
 		assert(tmp.isValid());
-	}*/
+	}
 	
 
 	cout << "test : contains" << endl;
@@ -376,10 +376,10 @@ void moreOrderedTest(T& ost){
 		ost.put(i.key(), 2 * i.key());
 		assert(*ost.get(i.key()) == i.key() * 2);
 	}
-	/*{
+	{
 		T tmp(ost);
 		assert(tmp.isValid());
-	}*/
+	}
 }
 int validateIterator(const SymbolTable<KeyType, ValueType>& st){
 	cout << "validate iterator" << endl;

@@ -1506,22 +1506,6 @@ public:
 		return children[0]->min();
 	}
 
-	template<class NodeTraits>
-	void removeMin(NodeTraits traits) {
-		if(count == 0) return;
-		if(nullptr == children) items.erase(items.begin());
-		else ensureNum(0, traits)->removeMin(traits);
-		--count;
-	}
-
-	template<class NodeTraits>
-	void removeMax(NodeTraits traits) {
-		if(count == 0) return;
-		if(nullptr == children) items.pop_back();
-		else ensureNum(items.size(), traits)->removeMax(traits);
-		--count;
-	}
-
 	const BTreeNode* minNode() const {
 		if(nullptr == children) return this;
 		return children[0]->minNode();
@@ -1678,24 +1662,61 @@ public:
 	template<class NodeTraits>
 	static bool remove(BTreeNode*& node, const K& k, NodeTraits traits){
 		if(removeInner(node, k, traits)){
-			while(node->childCount() == 0){
-				if(nullptr == node->children){
-					node = nullptr;
-					break;
-				}
-
-				BTreeNode* toDelete = node;
-				node = node->children[0];
-
-				//avoid child link being deleted.
-				toDelete->count = 0;
-				delete toDelete;
-			}
+			node = adjustNode(node);
 			return true;
 		}
 		return false;
 	}
+
+	template<class NodeTraits>
+	static bool removeMin(BTreeNode*& node, NodeTraits traits) {
+		if(nullptr == node && node->count == 0) return false;
+		node->removeMin(traits);
+		node = adjustNode(node);
+		return true;
+	}
+
+	template<class NodeTraits>
+	static bool removeMax(BTreeNode*& node, NodeTraits traits) {
+		if(nullptr == node && node->count == 0) return false;
+		node->removeMax(traits);
+		node = adjustNode(node);
+		return true;
+	}
 private:
+
+	static BTreeNode* adjustNode(BTreeNode* node){
+		while(node->childCount() == 0){
+			if(nullptr == node->children){
+				node = nullptr;
+				break;
+			}
+
+			BTreeNode* toDelete = node;
+			node = node->children[0];
+
+			//avoid child link being deleted.
+			toDelete->count = 0;
+			delete toDelete;
+		}
+		return node;
+	}
+
+	template<class NodeTraits>
+	void removeMin(NodeTraits traits) {
+		if(count == 0) return;
+		if(nullptr == children) items.erase(items.begin());
+		else ensureNum(0, traits)->removeMin(traits);
+		--count;
+	}
+
+	template<class NodeTraits>
+	void removeMax(NodeTraits traits) {
+		if(count == 0) return;
+		if(nullptr == children) items.pop_back();
+		else ensureNum(items.size(), traits)->removeMax(traits);
+		--count;
+	}
 	/*
 	 * Merge the {@param index}-th child and {@param index + 1}-th child 
 	 * 	and the key at {@param index} into one node.
@@ -1829,8 +1850,10 @@ private:
 	BTreeNode(const BTreeNode& node, NodeTraits traits){
 		items = node.items;
 		count = node.count;
-		children = new BTreeNode*[traits.num() * 2];
-		for(size_t i = 0;i <= items.size();++ i) children[i] = new BTreeNode(*node.children[i], traits);
+		if(nullptr != node.children){
+			children = new BTreeNode*[traits.num() * 2];
+			for(size_t i = 0;i <= items.size();++ i) children[i] = new BTreeNode(*node.children[i], traits);
+		}
 	}
 
 	template<class NodeTraits>
@@ -2033,15 +2056,11 @@ public:
 	}
 
 	bool removeMin() override {
-		if(NodePtr() == root) return false;
-		root->removeMin(traits);
-		return true;
+		return Node::removeMin(root, traits);
 	}
 
 	bool removeMax() override {
-		if(NodePtr() == root) return false;
-		root->removeMax(traits);
-		return true;
+		return Node::removeMax(root, traits);
 	}
 
 	~BTreeBase(){ delete root;}
