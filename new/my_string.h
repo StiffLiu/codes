@@ -11,6 +11,7 @@
 #include <map>
 #include <exception>
 #include <queue>
+#include <algorithm>
 
 namespace my_lib{
 
@@ -149,38 +150,149 @@ struct NumCStrTraits : public CStrTraits{
 
 using CStrMSD = MSD<const char*, CStrTraits>;
 
-template<class Item, class ItemTraits>
-class Quick3WaySort{
-static void sort(Item array[], unsigned int low, unsigned int high, unsigned int index){
-	if (high <= low)
-	       	return;
+template<class T>
+bool compareForTest(T t1, T t2){
+	return t1 < t2;
+}
 
-	auto lt = low, gt = high - 1;
-	auto i = low + 1;
-	auto v = ItemTraits::addr(array[low], index);
-	if(v != nullptr){
+template<>
+bool compareForTest(const char *s1, const char *s2){
+	return std::strcmp(s1, s2) < 0;
+}
+
+
+template<class Array, class SizeType>
+bool isSorted(Array array, SizeType low, SizeType high){
+	for(SizeType i = low + 1;i < high;++ i){
+		if(compareForTest(array[i], array[i - 1])){
+			for(SizeType j = low;j < high;++ j)
+				std::cout << j << "th : " << array[j] << std::endl;
+		 	return false;
+		}
+	}
+	return true;
+}
+
+template<class ArrayTraits>
+class Quick3WaySort{
+template<class Array, class SizeType>
+static void sort(Array array, SizeType low, SizeType high, SizeType index){
+begin_of_sort:
+	if(high == low + 2){
+		auto gt = high - 1;
+		auto v1 = ArrayTraits::addr(array[low], index);
+		auto v2 = ArrayTraits::addr(array[gt], index);
+		while(decltype(v1)() != v1 && decltype(v2)() != v2 && *v1 == *v2){
+			++index;
+			v1 = ArrayTraits::addr(array[low], index);
+			v2 = ArrayTraits::addr(array[gt], index);
+		}
+		if(decltype(v2)() != v2 && (decltype(v1)() == v1 || *v2 < *v1)){
+			ArrayTraits::swap(array, low, gt);
+		}
+		assert(isSorted(array, low, high));
+		return;
+	}
+
+	/*std::cout << "sorting array.. : " << std::endl;
+	for(SizeType j = low;j < high;++ j)
+		std::cout << j << "th : " << array[j] << std::endl;*/
+
+	auto lt = low;
+	auto gt = high - 1;
+	auto i = low;++ i;
+	auto v = ArrayTraits::addr(array[low], index);
+	if(decltype(v)() != v){
 		while (i <= gt){
-			auto u = ItemTraits::addr(array[i], index);
-			if(u == nullptr || *u < *v) ItemTraits::swap(array, lt++, i++);
-			else if(*u > *v) ItemTraits::swap(array, i, gt--);
+			auto u = ArrayTraits::addr(array[i], index);
+			if(decltype(u)() == u || *u < *v) ArrayTraits::swap(array, lt++, i++);
+			else if(*u > *v) ArrayTraits::swap(array, i, gt--);
 			else ++i;
 		}
-		sort(array, low, lt, index);
-		sort(array, lt, gt + 1, index+1);
+		/*for(SizeType i = low;i < lt;++ i) 
+			assert(*ArrayTraits::addr(array[i], index) < *ArrayTraits::addr(array[lt], index));
+		for(SizeType i = lt + 1;i <= gt;++ i) 
+			assert(*ArrayTraits::addr(array[lt], index) == *ArrayTraits::addr(array[i], index));
+		for(SizeType i = gt + 1;i < high;++ i) 
+			assert(*ArrayTraits::addr(array[lt], index) < *ArrayTraits::addr(array[i], index));*/
+		//lt - low > gt + 1 - lt
+		if(2 * lt > gt + 1 + low){
+
+			//gt + 1 - lt > 1
+			if(gt > lt) sort(array, lt, gt + 1, index + 1);
+			//assert(isSorted(array, lt, gt + 1));
+
+			//high - (gt + 1) > lt - low
+			if(high + low > lt + gt + 1){
+				//lt - low > 1
+				if(lt > low + 1) sort(array, low, lt, index);
+				// sort(array, gt + 1, high, index);
+				//assert(isSorted(array, low, lt));
+				
+				//high - (gt + 1) < 2
+				if(high < gt + 3) return;
+				//avoid recursive call : sort(array, gt + 1, high, index)
+				low = gt + 1;
+				goto begin_of_sort;
+			}
+
+			//high - (gt + 1) > 1
+			if(high > gt + 2) sort(array, gt + 1, high, index);
+			//assert(isSorted(array, gt + 1, high));
+			
+			//lt - low < 2
+			if(lt < low + 2) return;
+			//avoid recursiv call : sort(array, low, lt, index);
+			high = lt;
+			goto begin_of_sort;
+		}else{
+			if(lt > low + 1) sort(array, low, lt, index);
+			//assert(isSorted(array, low, lt));
+
+			// high - (gt + 1) > (gt + 1) - lt
+			if(high + lt > 2 * gt + 2){
+				//gt + 1 - lt > 1
+				if(gt > lt) sort(array, lt, gt + 1, index + 1);
+				//assert(isSorted(array, lt, gt + 1));
+
+				//high - (gt + 1) < 2
+				if(high < gt + 3) return;
+				//avoid recursive call : sort(array, gt + 1, high, index)
+				low = gt + 1;
+				goto begin_of_sort;
+			}
+
+			//high - (gt + 1) > 1
+			if(high > gt + 2) sort(array, gt + 1, high, index);
+			//assert(isSorted(array, gt + 1, high));
+
+			//gt + 1 - lt < 2
+			if(gt < lt + 1) return;
+			//avoid recursive call : sort(array, lt, gt + 1, index + 1);
+			low = lt; high = gt + 1; ++index;
+			goto begin_of_sort;
+		}
 	}else{
 		while (i <= gt)
-			if(ItemTraits::addr(array[i], index) != nullptr) ItemTraits::swap(array, i, gt--);
+			if(decltype(v)() != ArrayTraits::addr(array[i], index)) ArrayTraits::swap(array, i, gt--);
 			else i++;
+		//avoid recursive call : sort(array, gt, high, index);
+		//assert(isSorted(array, low, gt + 1));
+		low = gt + 1;
+		if(high > low + 1) goto begin_of_sort;
+		//assert(isSorted(array, gt, high));
 	}
-	sort(array, gt+1, high, index);
+
 }
 public:
-	static void sort(Item array[], unsigned int n){
-		sort(array, 0, n, 0);
+	template<class Array, class SizeType>
+	static void sort(Array array, SizeType n){
+		if (n <= 1) return;
+		sort(array, SizeType(), n, SizeType());
 	}
 };
 
-using CStrQ3WS = Quick3WaySort<const char*, CStrTraits>;
+using CStrQ3WS = Quick3WaySort<CStrTraits>;
 
 template<class Key, class Value, class KeyTraits>
 class Trie{
@@ -1877,6 +1989,71 @@ public:
 			}
 		}
 		return true;
+	}
+};
+
+template<class String, class Less, class SizeType = size_t >
+class SuffixArray{
+	SizeType* sufficies = nullptr;
+	String str = String();
+	SizeType length = SizeType();
+	Less less;
+	friend class Comparator;
+	struct Comparator{
+		const SuffixArray *sa = nullptr;
+		Comparator(const SuffixArray* sa) : sa(sa){}
+		bool operator()(SizeType i, SizeType j){
+			return sa->less(sa->str, i, sa->str, j);
+		}
+		bool operator()(SizeType i, const String& k){
+			return sa->less(sa->str, i, k, SizeType());
+		}
+		bool operator()(const String& k, SizeType i){
+			return sa->less(k, SizeType(), sa->str, i);
+		}
+	};
+public:
+	SuffixArray(const typename std::remove_cv<String>::type& str, SizeType length, 
+		const Less& less) : str(str), length(length), less(less){
+		if(SizeType() < length){
+			sufficies = new SizeType[length];
+			for(SizeType i = SizeType();i < length;++ i) sufficies[i] = i;
+		}	
+		std::sort(sufficies, sufficies + length, Comparator(this));
+	}
+
+	SuffixArray(const SuffixArray&) = delete;
+	SuffixArray& operator=(const SuffixArray&) = delete;
+	~SuffixArray(){delete[] sufficies;}
+
+	//length of the string
+	SizeType size() const {return length;}
+
+	//index of the i-th smallest suffix string.
+	SizeType index(SizeType i) const {
+		return sufficies[i];
+	}
+
+	//length of longest common prefix of the i-th smallest and (i+1)-th smallest suffix string.
+	SizeType lcp(SizeType index) const {
+		SizeType len = SizeType();
+		if(index < length){
+			SizeType i = sufficies[index];
+			++ index;
+			if(index < length){
+				SizeType j = sufficies[index];
+				while(i < length && j < length && str[i] == str[j]){
+					++len;++i;++j;
+				}
+			}
+		}
+		return len;
+	}
+
+	//number of suffixes less than key
+	SizeType rank(const String& key) const {
+		if(nullptr == sufficies) return SizeType();
+		return std::lower_bound(sufficies, sufficies + length, key, Comparator(this)) - sufficies;
 	}
 };
 

@@ -15,16 +15,16 @@
 {\
 	clock_t start = clock();\
 	statement;\
-	std::cout << desc << (clock() - start) << std::endl;\
+	std::cout << desc << (clock() - start) / (double)CLOCKS_PER_SEC << std::endl;\
 }
 
 void generateStrings(std::vector<std::string>& strs){
 	using namespace my_lib;
-	const unsigned int count = 10000;
+	const unsigned int count = 1000000;
 	RandStringGenerator gen(10, 100);
 	
 	strs.resize(count);
-	for(unsigned int i = 0;i < count;++ i) gen.randStringInt(strs[i]);
+	for(unsigned int i = 0;i < count;++ i) gen.randStringAlpha(strs[i]);
 }
 
 std::vector<std::string> generateStrings(){
@@ -104,6 +104,7 @@ int test_msd_sort(int argc, char *argv[]){
 	MEASURETIME((MSD<StrArray, StrArrayTraits>::sort(cstrs, count)), "msd time:")
 	cout << "msd count: " << msdCount << endl;
 #endif
+	assert(std::is_sorted(cstrs, cstrs + count, [](const char* s1, const char* s2){return strcmp(s1, s2) < 0;}));
 	//cout << "---------------------after  msd sort---------------------" << endl;
 	//for(unsigned int i = 0;i < count;++ i) cout << cstrs[i] << std::endl;
 
@@ -113,9 +114,10 @@ int test_msd_sort(int argc, char *argv[]){
 	MEASURETIME(CStrQ3WS::sort(cstrs, count), "quick 3 way:")
 #else
 	for(unsigned int i = 0;i < count;++ i) /*cout << (*/cstrs[i] = StrArray{q3wCounter, strs[i].c_str()}/*) << std::endl*/;
-	MEASURETIME((Quick3WaySort<StrArray, StrArrayTraits>::sort(cstrs, count)), "quick 3 way:")
+	MEASURETIME((Quick3WaySort<StrArrayTraits>::sort(cstrs, count)), "quick 3 way:")
 	cout << "quick 3 way count: " << q3wCount << endl;
 #endif
+	assert(std::is_sorted(cstrs, cstrs + count, [](const char* s1, const char* s2){return strcmp(s1, s2) < 0;}));
 	//cout << "---------------------after  quick 3 way sort---------------------" << endl;
 	//for(unsigned int i = 0;i < count;++ i) cout << cstrs[i] << std::endl;
 
@@ -423,11 +425,41 @@ int test_compress(int argc, char *argv[]){
 	return 0;
 }
 
-int main(int argc, char *argv[]){
-	/*for(unsigned int i = 0;i < 1;++ i){
-		test_2d_search(argc, argv);
-	}*/
-	test_compress(argc, argv);
+// longest repeated sub-string.
+std::pair<size_t,size_t> lrss(const std::string& str){
+	using namespace my_lib;
+	auto func=[](const std::string& s1, size_t i1, const std::string& s2, size_t i2){
+		return std::strcmp(s1.c_str() + i1, s2.c_str() + i2) < 0;
+	};
+	SuffixArray<const std::string&, decltype(func)> sa(str, str.size(), func);
+	size_t len = 0, index = static_cast<size_t>(-1);
+	for(size_t i = 0;i + 1 < sa.size();++ i){
+		size_t idx1 = sa.index(i), idx2 = sa.index(i + 1);
+		if(idx1 + len < sa.size() && idx2 + len < sa.size()){
+			size_t lcp = sa.lcp(i);
+			if(lcp > len){
+				len = lcp;
+				index = idx1;
+			}
+		}
+	}
+	return {index, len};
+}
 
+int lrss_client(int argc, char *argv[]){
+	char ch;
+	std::string str;
+	while(std::cin.get(ch)) str.push_back(ch);
+	decltype(lrss(str)) ret;
+	MEASURETIME(ret = lrss(str), "longest repeated sub-string search takes(seconds) : ");
+	if(static_cast<size_t>(-1) != ret.first){
+		std::cout << "longest repeated sub-string is at index : " << ret.first << ", and length is :"
+			<< ret.second << "\t" << str.substr(ret.first, ret.second) << std::endl;
+	}
+	return 0;
+}
+int main(int argc, char *argv[]){
+	//lrss_client(argc, argv);
+	test_msd_sort(argc, argv);
 	return 0;
 }
