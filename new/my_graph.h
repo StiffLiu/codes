@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <queue>
+#include <list>
 #include <stack>
 #include <algorithm>
 #include <iostream>
@@ -25,10 +26,11 @@ using DefaultStdSet = std::set<K>;
 template<template<class U, class V> class Map = DefaultStdMap, template<class U> class List = DefaultStdSet >
 class AdjListT{
 public:
-	typedef List<unsigned int> Vertices;
-	typedef Map<unsigned int, Vertices> Edges;
+	typedef unsigned int Vertex;
+	typedef List<Vertex> Vertices;
+	typedef Map<Vertex, Vertices> Edges;
 
-	AdjListT(unsigned int vertexCount) : vertexCount(vertexCount){
+	AdjListT(Vertex vertexCount) : vertexCount(vertexCount){
 	}
 
 	unsigned int getVertexCount() const {
@@ -57,18 +59,18 @@ public:
 	}
 
 protected:
-	bool isAdj(unsigned int i, unsigned int j) const {
+	bool isAdj(Vertex i, Vertex j) const {
 		auto pos = edges.find(i);
 		if(pos != edges.end())
 			return pos->second.find(j) != pos->second.end();
 		return false;
 	}
 
-	void addEdgeNoCheck(unsigned int i, unsigned int j) {
+	void addEdgeNoCheck(Vertex i, Vertex j) {
 		edges[i].insert(j);
 	}
 
-	void check(unsigned int i) const throw(std::invalid_argument) {
+	void check(Vertex i) const throw(std::invalid_argument) {
 		if(i >= vertexCount){
 			std::stringstream os;
 			os << "vertex " << i << " out of range, max is " << vertexCount << ", line " << __LINE__ << " file " << __FILE__;
@@ -76,7 +78,7 @@ protected:
 		}
 	}
 
-	void check(unsigned int i, unsigned int j) const throw(std::invalid_argument){
+	void check(Vertex i, Vertex j) const throw(std::invalid_argument){
 		if(i == j){
 			std::stringstream os;
 			os << "self loop for vertex " << i << " not allowed, line " << __LINE__ << " file " << __FILE__;
@@ -84,25 +86,25 @@ protected:
 		}
 	}
 
-	void addEdgeCheck(unsigned int i, unsigned int j) throw(std::invalid_argument) {
+	void addEdgeCheck(Vertex i, Vertex j) throw(std::invalid_argument) {
 		check(i);
 		check(j);
 		check(i, j);
 		addEdgeNoCheck(i, j);
 	}
 
-	void addEdge(unsigned int i, unsigned int j) throw(std::invalid_argument) {
+	void addEdge(Vertex i, Vertex j) throw(std::invalid_argument) {
 		addEdgeCheck(i, j);
 	}
 
-	unsigned int degree(unsigned int i) const {
+	unsigned int degree(Vertex i) const {
 		auto pos = edges.find(i);
 		if(pos != edges.end())
 			return pos->second.size();
 		return 0;
 	}
 
-	const Vertices* adj(unsigned int i) const {
+	const Vertices* adj(Vertex i) const {
 		auto pos = edges.find(i);
 		if(pos != edges.end())
 			return &pos->second;
@@ -121,11 +123,12 @@ template<template<class U, class V> class Map = DefaultStdMap, template<class U>
 class UndirAdjListT : public AdjListT<Map, List>{
 	typedef AdjListT<Map, List> Super;
 public:
+	typedef typename AdjListT<Map, List>::Vertex Vertex;
 	UndirAdjListT(unsigned int vertexCount = 0) : Super(vertexCount){
 	}
 	using Super::isAdj;
 
-	void addEdge(unsigned int i, unsigned int j){
+	void addEdge(Vertex i, Vertex j){
 		Super::check(i);
 		Super::check(j);
 		Super::check(i, j);
@@ -147,6 +150,7 @@ template<template<class U, class V> class Map = DefaultStdMap, template<class U>
 class DirAdjListT : public AdjListT<Map, List>{
 	typedef AdjListT<Map, List> Super;
 public:
+	typedef typename AdjListT<Map, List>::Vertex Vertex;
 	DirAdjListT(unsigned int vertexCount = 0) : Super(vertexCount){
 	}
 	using Super::isAdj;
@@ -158,11 +162,11 @@ public:
 		addEdge(edge.getV1(), edge.getV2());
 	}
 
-	unsigned int outDegree(unsigned int i) const {
+	unsigned int outDegree(Vertex i) const {
 		return Super::degree(i);
 	}
 
-	const typename Super::Vertices* outAdj(unsigned int i) const {
+	const typename Super::Vertices* outAdj(Vertex i) const {
 		return Super::adj(i);
 	}
 
@@ -191,12 +195,13 @@ class DblDirAdjListT : protected DirAdjListT<Map, List>{
 	typedef DirAdjListT<Map, List> Super;
 	DirAdjListT<Map, List> reverse;
 public:
+	typedef typename DirAdjListT<Map,List>::Vertex Vertex;
 	DblDirAdjListT(unsigned int vertexCount = 0) : Super(vertexCount), reverse(vertexCount){
 	}
 	using Super::isAdj;
 	using Super::getVertexCount;
 
-	void addEdge(unsigned int i, unsigned int j){
+	void addEdge(Vertex i, Vertex j){
 		Super::addEdge(i, j);
 		reverse.addEdge(j, i);
 	}
@@ -215,11 +220,11 @@ public:
 	using Super::outAdj;
 	using Super::isMap;
 
-	unsigned int inDegree(unsigned int i) const {
+	unsigned int inDegree(Vertex i) const {
 		return reverse.outDegree(i);
 	}
 	
-	auto inAdj(unsigned int i) const -> decltype(reverse.outAdj(i)) {
+	auto inAdj(Vertex i) const -> decltype(reverse.outAdj(i)) {
 		return reverse.outAdj(i);
 	}
 
@@ -365,13 +370,13 @@ struct UndirSearchStrategy{
 struct UndirDfsStrategy : public UndirSearchStrategy<UndirDfsStrategy> {
 	using UndirSearchStrategy::operator();
 
-	template<class Graph, class CC>
-	unsigned int operator()(unsigned int source, unsigned int root, const Graph& graph, CC& cc) const {
+	template<class Vertex, class Graph, class CC>
+	unsigned int operator()(Vertex source, Vertex root, const Graph& graph, CC& cc) const {
 		return (*this)(source, root, graph, cc, *this);
 	}
 
-	template<class Graph, class CC, class Strategy>
-	unsigned int operator()(unsigned int source, unsigned int root, const Graph& graph, CC& cc, const Strategy& strategy) const {
+	template<class Vertex, class Graph, class CC, class Strategy>
+	unsigned int operator()(Vertex source, Vertex root, const Graph& graph, CC& cc, const Strategy& strategy) const {
 		auto adj = graph.adj(source);
 		unsigned int depth = 0;
 		if(adj != nullptr)
@@ -394,16 +399,16 @@ struct UndirDfsStrategy : public UndirSearchStrategy<UndirDfsStrategy> {
  * */
 struct UndirBfsStrategy : public UndirSearchStrategy<UndirBfsStrategy>{
 	using UndirSearchStrategy::operator();
-	template<class Graph, class CC>
-	unsigned int operator()(unsigned int source, unsigned int root, const Graph& graph, CC& cc){
-		std::queue<unsigned int> parents;
-		std::queue<unsigned int> children;
+	template<class Vertex, class Graph, class CC>
+	unsigned int operator()(Vertex source, Vertex root, const Graph& graph, CC& cc){
+		std::queue<Vertex> parents;
+		std::queue<Vertex> children;
 		parents.push(source);
 
 		unsigned int depth = 0;
 		while(!parents.empty()){
 			while(!parents.empty()){
-				unsigned int current = parents.front();
+				auto current = parents.front();
 				parents.pop();
 
 				auto adj = graph.adj(current);
@@ -435,7 +440,8 @@ struct DirSearchStrategyAdapter{
 		Graph& graph;
 		GraphAdapter(Graph& graph) : graph(graph){
 		}
-		auto adj(unsigned int v) const -> decltype(graph.outAdj(v)) {
+		typedef typename Graph::Vertex Vertex;
+		auto adj(Vertex v) const -> decltype(graph.outAdj(v)) {
 			return graph.outAdj(v);
 		}
 		auto getEdges() const -> decltype(graph.getEdges()) {
@@ -450,7 +456,7 @@ struct DirSearchStrategyAdapter{
 	}
 
 	template<class Graph, class CC>
-	unsigned int operator()(unsigned int source, unsigned int root, const Graph& graph, CC& cc) const {
+	unsigned int operator()(typename Graph::Vertex source, typename Graph::Vertex root, const Graph& graph, CC& cc) const {
 		GraphAdapter<const Graph> adapter(graph);
 		return strategy(source, root, adapter, cc);
 	}
@@ -839,7 +845,7 @@ public:
 		return getUnderlyingGraph().degree(i);
 	}
 
-	auto adj(unsigned int i) const ->decltype(getUnderlyingGraph().adj(i)) {
+	auto adj(unsigned int i) const ->decltype(this->getUnderlyingGraph().adj(i)) {
 		return getUnderlyingGraph().adj(i);
 	}
 };
@@ -1048,8 +1054,9 @@ protected:
 			UndirDfsStrategy::operator()(graph, cc, componentCount, *this);
 		}
 
+		typedef unsigned int Vertex;
 		template<class Graph, class CC>
-		unsigned int operator()(unsigned int source, unsigned int root, const Graph& graph, CC& cc) const {
+		unsigned int operator()(Vertex source, Vertex root, const Graph& graph, CC& cc) const {
 			unsigned int depth = 0;
 			if(!cycleFound){
 				onStack.insert(source);
@@ -1418,11 +1425,12 @@ bool directedEulerianCycle(const Graph& graph, Path& path){
 	return true;
 }
 
+template<class Vertex>
 class EdgeBase{
 protected:
-	unsigned int v1, v2;
+	Vertex v1, v2;
 public:
-	EdgeBase(unsigned int v1, unsigned int v2) : v1(v1), v2(v2){
+	EdgeBase(Vertex v1, Vertex v2) : v1(v1), v2(v2){
 	}
 
 	bool operator==(const EdgeBase& e) const {
@@ -1435,11 +1443,11 @@ public:
 		return v1 < e.v1;
 	}
 
-	unsigned int getV1() const {
+	Vertex getV1() const {
 		return v1;
 	}
 
-	unsigned int getV2() const {
+	Vertex getV2() const {
 		return v2;
 	}
 
@@ -1455,15 +1463,18 @@ public:
 	}
 };
 
-class UndirEdge : public EdgeBase{
+template<class Vertex>
+class UndirEdge : public EdgeBase<Vertex>{
+	typedef EdgeBase<Vertex> Super;
 public:
-	UndirEdge(unsigned int v1, unsigned int v2) : EdgeBase(v2 < v1 ? EdgeBase(v2, v1) : EdgeBase(v1, v2)){
+	UndirEdge(Vertex v1, Vertex v2) : Super(v2 < v1 ? Super(v2, v1) : Super(v1, v2)){
 	}
 };
 
-class DirEdge : public EdgeBase{
+template<class Vertex>
+class DirEdge : public EdgeBase<Vertex>{
 public:
-	DirEdge(unsigned int v1, unsigned int v2) : EdgeBase(v1, v2){
+	DirEdge(Vertex v1, Vertex v2) : EdgeBase<Vertex>(v1, v2){
 	}
 };
 
@@ -1471,7 +1482,8 @@ template<class Edge, class Weight = double>
 class WeightedEdgeT : public Edge{
 	Weight weight;
 public:
-	WeightedEdgeT(unsigned int v1, unsigned int v2, Weight w) : Edge(v1, v2), weight(w){
+	template<class Vertex>
+	WeightedEdgeT(Vertex v1, Vertex v2, Weight w) : Edge(v1, v2), weight(w){
 	}
 
 	Weight getWeight() const {
@@ -1484,28 +1496,31 @@ public:
 	}
 };
 
-template<class Weight = double>
-using WeightedUndirEdgeT = WeightedEdgeT<UndirEdge, Weight>;
+template<class Vertex, class Weight = double>
+using WeightedUndirEdgeT = WeightedEdgeT<UndirEdge<Vertex>, Weight>;
 
-template<class Weight = double>
-using WeightedDirEdgeT = WeightedEdgeT<DirEdge, Weight>;
+template<class Vertex, class Weight = double>
+using WeightedDirEdgeT = WeightedEdgeT<DirEdge<Vertex>, Weight>;
 
-using WeightedUndirEdge = WeightedUndirEdgeT<>;
+template<class Vertex>
+using WeightedUndirEdge = WeightedUndirEdgeT<Vertex>;
 
-using WeightedDirEdge = WeightedDirEdgeT<>;
+template<class Vertex>
+using WeightedDirEdge = WeightedDirEdgeT<Vertex>;
 
-template<class UnderlyingAdjList, class Weight, template<class T> class WeightedEdgeT>
+template<class UnderlyingAdjList, class Weight, template<class V, class T> class WeightedEdgeT>
 class WeightedAdjListT : protected UnderlyingAdjList{
 	typedef UnderlyingAdjList Super;
 	Weight minimum;
 public:
-	typedef WeightedEdgeT<Weight> WeightedEdge;
+	typedef typename UnderlyingAdjList::Vertex Vertex;
+	typedef WeightedEdgeT<Vertex, Weight> WeightedEdge;
 	//typedef std::unordered_set<WeightedEdge, EdgeBase::Hash> WeightedEdgeSet;
 	typedef std::set<WeightedEdge> WeightedEdgeSet;
 	WeightedAdjListT(unsigned int vertexCount = 0, Weight minimum = Weight()) : Super(vertexCount), minimum(minimum){
 	}
 
-	void addEdge(unsigned int i, unsigned int j, Weight weight){
+	void addEdge(Vertex i, Vertex j, Weight weight){
 		if (weight < minimum){
 			std::stringstream os;
 			os << "weight " << weight << " is smaller than the minimum " << minimum << ", line " << __LINE__ << " file " << __FILE__;
@@ -1529,11 +1544,16 @@ public:
 		return weightedEdges;
 	}
 
-	const WeightedEdge* getWeightedEdge(unsigned int i, unsigned int j) const {
+	const WeightedEdge* getWeightedEdge(Vertex i, Vertex j) const {
 		auto pos = weightedEdges.find(WeightedEdge(i, j, Weight()));
 		if (pos == weightedEdges.end())
 			return nullptr;
 		return &*pos;
+	}
+
+	Weight getWeight(Vertex i, Vertex j) const {
+		auto weightedEdge = getWeightedEdge(i, j);
+		return nullptr == weightedEdge ? Weight() : weightedEdge->getWeight();
 	}
 
 	template<class Stream>
@@ -1666,8 +1686,8 @@ protected:
 					//pick up the edge with minimum weight.
 					auto e = pq.pop();
 					auto pos = mst.find(e->getV1());
-					unsigned int vertexNotInTree = e->getV1();
-					unsigned int vertexInTree = e->getV2();
+					auto vertexNotInTree = e->getV1();
+					auto vertexInTree = e->getV2();
 					//std::cout << "using " << *e << std::endl;
 					//each edge in the heap must have at one vertex already in the tree.
 					//so if e->v1 is not in the tree, e->v2 must be in the tree.
@@ -1708,7 +1728,8 @@ protected:
 			pq.pop();
 			return edge;
 		}
-		void push(unsigned int v, Edge edge){
+		template<class Vertex>
+		void push(Vertex v, Edge edge){
 			pq.push(edge);
 		}
 		bool empty(){
@@ -2161,5 +2182,280 @@ public:
 	}
 };
 
+namespace{
+/*
+ * this class is expected only to be used in thhis namespace.
+ * No-way to make something private to a namespace?
+ */
+template<class DirGraph, class Vertex>
+struct private_IsDAG{
+	private_IsDAG(const DirGraph& graph) : graph(graph){
+		for(const auto& vertices : graph.getEdges()) for(const auto& v : vertices.second) ++inDegrees[v];
+	}
+	/*
+	 * DAG : directed acyclic graph.
+	 * A DAG must contain at least one vertex whose in-degree is zero.
+	 * The Directed Graph generated by removing one vertex from a DAG is also a DAG.
+	 * Assuming that the number of vertices of a DAG is finite, then by iteratively removing 
+	 * vertices whose in-dgree are zero in a DAG and the subsequently generated DAG, all
+	 * the vertices will be removed. 
+	 *
+	 * Time complexity of thi function is O(E), space complexity is O(V)
+	 * where E is the number of edges and V is the number of vertices.
+	 */
+	operator bool() const {
+		std::vector<Vertex> toRemove;
+		for(const auto& vertices : graph.getEdges()) 
+			if(inDegrees.find(vertices.first) == inDegrees.end())
+				toRemove.push_back(vertices.first);
+
+		while(!toRemove.empty()){
+			for(const auto& v : toRemove){
+				auto outAdj = graph.outAdj(v);
+				if(decltype(outAdj)() != outAdj)
+					for(auto v : *outAdj) --inDegrees[v];
+			}
+			toRemove.clear();
+			for(const auto& v : inDegrees) if(v.second == 0) toRemove.push_back(v.first);
+			for(const auto& v : toRemove) inDegrees.erase(v);
+	 	}
+	 	return inDegrees.empty();
+ 	}
+protected:
+ 	mutable std::map<Vertex, unsigned int> inDegrees; const DirGraph& graph;
+};
+
+}
+
+template<class DirGraph>
+bool isDAG(const DirGraph& graph){
+	//Relying on typedef in class, instead of the following complex expression:
+	//  typedef typename std::remove_cv<decltype(graph.getEdges().begin()->first)>::type Vertex;
+	return private_IsDAG<DirGraph, typename DirGraph::Vertex>(graph);
+}
+
+/*
+ * A ST-network is a DAG with only one vertex whose in-degree is zero, called the source, 
+ * and only one vertex whose out-degree is zero, called the sink.
+ * This function checks to see is the given graph is a ST-network.
+ * */
+template<class DirGraph, class Vertex>
+bool isSTNetWork(const DirGraph& graph, Vertex &source, Vertex& sink){
+	struct IsSTNetWork : public private_IsDAG<DirGraph, Vertex>{
+		IsSTNetWork(const DirGraph& graph) : private_IsDAG<DirGraph, Vertex>(graph){}
+		bool getSrcAndSink(Vertex& source, Vertex &sink){
+			const auto& inDegrees = private_IsDAG<DirGraph, Vertex>::inDegrees;
+			const auto& edges = private_IsDAG<DirGraph, Vertex>::graph.getEdges();
+		 	if(inDegrees.size() != edges.size()) return false;
+			auto sourcePos = edges.end();
+			{
+				auto end = sourcePos;
+				for(auto begin = edges.begin();begin != end;++begin)
+					if(inDegrees.find(begin->first) == inDegrees.end()){
+						if(sourcePos != end) return false;
+						sourcePos = begin;
+					}
+				if(sourcePos == end) return false;
+			}
+			
+			auto sinkPos =  inDegrees.end();
+			{
+				auto end = sinkPos;
+				for(auto begin = inDegrees.begin();begin != end;++begin)
+					if(edges.find(begin->first) == edges.end()){
+						if(sinkPos != end) return false;
+						sinkPos = begin;
+					}
+				if(sinkPos == end) return false;
+			}
+			source = sourcePos->first;
+			sink = sinkPos->first;
+			return true;
+		}
+	}is(graph);
+	return is.getSrcAndSink(source, sink) && is;
+} 
+
+/*
+ * Find the max flow for a ST-network.
+ * Worst case time complexity is O(E*E*V)
+ * The {@code flow[dest][src]} is the weight(or flow) choosen
+ * for the edge (src, dest).
+ * */
+template<class WeightedDirGraph, class STFlow>
+void STNetworkMaxFlow(const WeightedDirGraph& graph, STFlow& flow){
+	// We're assuming a ST-network.
+	typedef typename WeightedDirGraph::Vertex Vertex;
+	Vertex source, sink;
+	if(!isSTNetWork(graph, source, sink)) throw std::invalid_argument("not a ST-network, this algorithm works only for ST-network");
+
+	if(source == sink) return;
+
+	//std::cout << "source vertex is : " << source << ", sink vertex is : " << sink << std::endl;
+
+	typedef typename std::remove_reference<typename std::remove_cv<decltype(flow[sink][source])>::type>::type Weight;
+
+	struct AugmentPathFinder{
+		STFlow& flow;
+		const WeightedDirGraph& graph;
+
+		AugmentPathFinder(const WeightedDirGraph& graph, STFlow& flow) : graph(graph), flow(flow){
+		}
+
+		struct AugmentPath{
+			STFlow& flow;
+			const WeightedDirGraph& graph;
+			std::vector<Vertex> path;
+			AugmentPath(const WeightedDirGraph& graph, STFlow& flow) : graph(graph), flow(flow){
+			}
+			bool adjust(){
+				if(path.empty()) return false;
+				Weight minWeight = Weight();
+				//iterate all the forward edge and backward edge to find the 
+				//minimum capacity.
+				for(size_t i = 1;i < path.size();++ i){
+					auto weightedEdge = graph.getWeightedEdge(path[i], path[i - 1]);
+					if(nullptr != weightedEdge){
+						//check if a forward edge.
+						auto weight = weightedEdge->getWeight();
+						auto backEdgesItor = flow.find(path[i - 1]);
+						if(backEdgesItor != flow.end()){
+							const auto& backEdges = backEdgesItor->second;
+							auto backEdgeItor = backEdges.find(path[i]);
+							if(backEdgeItor != backEdges.end()){
+								weight = weight - backEdgeItor->second;
+							}
+						}
+						if(minWeight == Weight()) minWeight = weight;
+						else minWeight = std::min(minWeight, weight);
+					}else{
+						//check if a backward edge.
+						auto backEdgesItor = flow.find(path[i]);
+						if(backEdgesItor != flow.end()){
+							const auto& backEdges = backEdgesItor->second;
+							auto backEdgeItor = backEdges.find(path[i - 1]);
+							if(backEdgeItor != backEdges.end()){
+								if(minWeight == Weight()) backEdgeItor->second;
+								else minWeight = std::min(minWeight, backEdgeItor->second);
+							}
+						}
+					}
+				}
+				
+				//adjust the capacity for each edge.
+				if(Weight() < minWeight){
+					for(size_t i = 1;i < path.size();++ i){
+						auto backEdgesItor = flow.find(path[i]);
+						if(backEdgesItor != flow.end()){
+							auto& backEdges = backEdgesItor->second;
+							auto backEdgeItor = backEdges.find(path[i - 1]);
+							if(backEdgeItor != backEdges.end()){
+								if(!(minWeight < backEdgeItor->second))
+									backEdges.erase(path[i - 1]);
+								else
+									backEdgeItor->second = backEdgeItor->second - minWeight;
+							}else{
+								assert(nullptr != graph.getWeightedEdge(path[i], path[i - 1]));
+								//std::cout << "add " << minWeight << " to (" << path[i - 1] << "," << path[i] << ")" << std::endl;
+								flow[path[i - 1]][path[i]] += minWeight;
+								assert(!(graph.getWeight(path[i], path[i - 1]) < flow[path[i - 1]][path[i]]));
+							}
+						}else{
+							assert(nullptr != graph.getWeightedEdge(path[i], path[i - 1]));
+							//std::cout << "add " << minWeight << " to (" << path[i - 1] << "," << path[i] << ")" << std::endl;
+							flow[path[i - 1]][path[i]] += minWeight;
+							assert(!(graph.getWeight(path[i], path[i - 1]) < flow[path[i - 1]][path[i]]));
+						}
+					}
+
+					//clear vertices that doesn't have backward edges.
+					std::vector<Vertex> toBeRemoved;
+					for(const auto& backEdges : flow)	if(backEdges.second.empty()) toBeRemoved.push_back(backEdges.first);
+					for(auto& v : toBeRemoved) flow.erase(v);
+					//std::cout << "min weight is : " << minWeight << std::endl;
+					return true;
+				}
+				return false;
+			}
+		};
+
+		// an edge is a forward edge if it still has remaining capacity.
+		// precondition is that (src, dest) is an edge in the ST-network.
+		bool isForwardEdge(Vertex src, Vertex dest){
+			auto backEdgesItor = flow.find(dest);
+			if(backEdgesItor == flow.end()) return true;
+			
+			const auto& backEdges = backEdgesItor->second;
+			auto backEdgeItor = backEdges.find(src);
+			if(backEdgeItor == backEdges.end()) return true;
+			//std::cout << "weight is " << graph.getWeight(src, dest) << std::endl;
+			return backEdgeItor->second < graph.getWeight(src, dest);
+		}
+
+		AugmentPath construct(const std::map<Vertex, Vertex>& childToParent,
+			Vertex source, Vertex sink){
+			AugmentPath path{graph, flow};
+			auto pos = childToParent.find(sink);
+			while(pos != childToParent.end()){
+				path.path.push_back(pos->first);
+				if(pos->second == source) break;
+				pos = childToParent.find(pos->second);
+			}
+			if(pos == childToParent.end()){
+				assert(false);
+				path.path.clear();
+			}else{
+				path.path.push_back(pos->second);
+			}
+			//for(auto& v: path.path) std::cout << v << ' ';
+			//std::cout << std::endl;
+			return path;
+		}
+
+		AugmentPath findOne(Vertex source, Vertex sink){
+			std::map<Vertex, Vertex> childToParent;
+			std::queue<unsigned int> parents;
+			std::queue<unsigned int> children;
+			parents.push(source);
+
+			while(!parents.empty()){
+				while(!parents.empty()){
+					auto current = parents.front();
+
+					parents.pop();
+
+					//visiting all unvisited forward edges.
+					auto adj = graph.outAdj(current);
+					if(adj != nullptr){
+						for(auto v : *adj)
+							if(childToParent.find(v) == childToParent.end() && isForwardEdge(current, v)){
+								//std::cout << "adding forward edge " << current << ',' << v << std::endl;
+								childToParent[v] = current;
+								if(v == sink ) return construct(childToParent, source, sink);
+								children.push(v);
+							}
+					}
+
+					//visiting all unvisited back edges.
+					auto backEdgesItor = flow.find(current);
+					if(backEdgesItor != flow.end()){
+						for(const auto& backEdge : backEdgesItor->second)
+							if(childToParent.find(backEdge.first) == childToParent.end()){
+								//std::cout << "adding backward edge " << current << ',' << backEdge.first << std::endl;
+								childToParent[backEdge.first] = current;
+								if(backEdge.first == sink) return construct(childToParent, source, sink);
+								children.push(backEdge.first);
+							}
+					}
+				}
+
+				parents.swap(children);
+			}
+			return {graph, flow};
+		}
+	};
+
+	while(AugmentPathFinder(graph, flow).findOne(source, sink).adjust());
+}
 }
 #endif //MY_LIB_GRAPH_H

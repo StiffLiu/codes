@@ -271,7 +271,7 @@ int test_random_dir_graph(int agrc, char *argv[]){
 		else
 			randomDAG(vertexCount, ratio, dal, rand);
 		//readAdjList(dal, "F:\\documents\\books\\Algorithms 4th Edition\\algs4-data\\tinyDG.txt");
-		dal = init_the_graph();
+		// dal = init_the_graph();
 		//cout << dal;
 		StrongConnectedComponent scc(dal);
 		//typedef std::unordered_map<unsigned int, std::unordered_set<unsigned int> > SCC;
@@ -383,6 +383,38 @@ int test_shortest_path(const char *fileName, unsigned int method){
 			cout << "Cannot reach " << i << " from 0" << endl;
 		}
 	}
+	return 0;
+}
+
+int test_stnetwork(int argc, char *argv[]){
+	using namespace my_lib;
+	typedef TxtStreamGraphReaderT<std::istringstream, ReadOneWeightedEdge> Reader;
+	std::istringstream is(
+		R"sample_wdg(
+			6
+			8
+			0 1 2.0
+			0 2 3.0
+			1 3 3.0
+			1 4 1.0
+			2 3 1.0
+			2 4 1.0
+			3 5 2.0
+			4 5 3.0
+		)sample_wdg");
+	Reader reader(is);
+	WeightedDirAdjList wdal;
+	reader >> wdal;
+	std::cout << "edges: " << std::endl;
+	for(const auto& i : wdal.getEdges()) 
+		for(const auto& j : i.second)
+			std::cout << '(' << i.first << ',' << j << ')' << std::endl;
+
+	std::map<unsigned int, std::map<unsigned int, double> > stFlow;
+	STNetworkMaxFlow(wdal, stFlow);
+	for(const auto& flow : stFlow)
+		for(const auto& one : flow.second)
+			std::cout << flow.first << "->" << one.first << "\t" << one.second << std::endl;
 	return 0;
 }
 
@@ -520,5 +552,6 @@ int test_regex(int argc, char *argv[]){
 int main(int argc, char *argv[]){
 	//return test_weighted_dir_graph(argc, argv);
 	//return test_math(argc, argv);
-	return test_random_dir_graph(argc, argv);
+	//return test_random_dir_graph(argc, argv);
+	return test_stnetwork(argc, argv);
 }
