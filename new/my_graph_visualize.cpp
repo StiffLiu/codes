@@ -84,17 +84,19 @@ struct RandomGraphGenerator2{
 	double startRatio = 0.1;
 	RandomGraphGenerator2(unsigned int vertexCount, double ratio = 0.2, double startRatio = 0.1) : vertexCount(vertexCount), ratio(ratio), startRatio(startRatio){
 	}
+
+	typedef my_lib::WeightedUndirEdge<unsigned int> WeightedEdge;
 	template<class Graph>
 	void operator()(Graph& graph) const {
 		using namespace my_lib;
 		using namespace std;
 		struct CompareWeight{
-			bool operator()(const WeightedUndirEdge& e1, const WeightedUndirEdge& e2){
+			bool operator()(const WeightedEdge& e1, const WeightedEdge& e2){
 				return e1.getWeight() < e2.getWeight();
 			}
 		};
 
-		std::priority_queue<WeightedUndirEdge, std::vector<WeightedUndirEdge>, CompareWeight> edges;
+		std::priority_queue<WeightedEdge, std::vector<WeightedEdge>, CompareWeight> edges;
 		unsigned int totalEdge = vertexCount * vertexCount / 2;
 		unsigned int startEdgeCount = totalEdge * startRatio;
 		unsigned int edgeCount = totalEdge * ratio + startEdgeCount;
@@ -103,7 +105,7 @@ struct RandomGraphGenerator2{
 				if(one.first < another.first){
 					auto deltaX = one.second.first - another.second.first;
 					auto deltaY = one.second.second - another.second.second;
-					edges.push(WeightedUndirEdge(one.first, another.first,
+					edges.push(WeightedEdge(one.first, another.first,
 						deltaX * deltaX + deltaY * deltaY));
 					if(edges.size() > edgeCount)
 						edges.pop();
@@ -200,6 +202,7 @@ struct RandomUndirGraphPloter : public my_lib::UndirGraphPlot{
 
 		EagerPrimMST prim(euclideanGraph);
 		for(auto& i : vertexToPoint) pointToVertex[i.second] = i.first;
+		typedef UndirEdge<unsigned int> UndirEdge;
 		typedef std::map<UndirEdge, int> EdgeToIndex;
 		EdgeToIndex edgeToIndex;
 		for(size_t i = 0;i < edges.size();i += 2) edgeToIndex[UndirEdge(pointToVertex[edges[i]], pointToVertex[edges[i + 1]])] = i / 2;
@@ -215,7 +218,8 @@ struct RandomUndirGraphPloter : public my_lib::UndirGraphPlot{
 			std::vector<double>& edgeColor;
 			MapAdapter(EdgeToIndex& edgeToIndex, std::vector<double>& edgeColor) : edgeToIndex(edgeToIndex), edgeColor(edgeColor){
 			}
-			void push_back(const WeightedUndirEdge *edge) const {
+			typedef my_lib::WeightedUndirEdge<unsigned int> WeightedEdge;
+			void push_back(const WeightedEdge *edge) const {
 				auto pos = edgeToIndex.find(UndirEdge(edge->getV1(), edge->getV2()));
 				if(pos != edgeToIndex.end()){
 					//mst edges colored yellow
