@@ -1,7 +1,4 @@
-// HeaderParser.cpp
-//
 
-#include "stdafx.h"
 #include "HeaderParser.h"
 #include <map>
 #include <iostream>
@@ -28,13 +25,16 @@ const char *Keyword::keywords[] = {
 struct Scope::ScopeAttribute{
 		int startToken;
 		int endToken;
-		int declarationeEndToken;
+		int declarationEndToken;
 		int varListSeparator;
 		bool allowFunctionDefine;
 		bool allowTypeDefine;
 		bool allowVarList;
 		bool allowCompondType;
 		bool allowInitialization;
+		bool allowBitType;
+		bool needDeclarationeEndToken;
+		bool needNewLine;
 	};
 
 static Scope::ScopeAttribute globalScopeAttribute;
@@ -55,31 +55,39 @@ namespace{
 				keywordList[Keyword::keywords[i]] = i;
 			globalScopeAttribute.startToken = Lexer::END;
 			globalScopeAttribute.endToken = Lexer::END;
-			globalScopeAttribute.declarationeEndToken = ';';
+			globalScopeAttribute.declarationEndToken = ';';
 			globalScopeAttribute.allowFunctionDefine = true;
 			globalScopeAttribute.allowTypeDefine = true;
 			globalScopeAttribute.allowVarList = true;
 			globalScopeAttribute.allowCompondType = true;
 			globalScopeAttribute.allowInitialization = true;
 			globalScopeAttribute.varListSeparator = ',';
+			globalScopeAttribute.allowBitType = false;
+			globalScopeAttribute.needDeclarationeEndToken = true;
+			globalScopeAttribute.needNewLine = true;
 
 			paramListAttribute.startToken =  '(';
 			paramListAttribute.endToken = ')';
-			paramListAttribute.declarationeEndToken = ',';
+			paramListAttribute.declarationEndToken = ',';
 			paramListAttribute.allowFunctionDefine = false;
 			paramListAttribute.allowTypeDefine = false;
 			paramListAttribute.allowVarList = true;
 			paramListAttribute.allowCompondType = false;
-			globalScopeAttribute.varListSeparator = ',';
+			paramListAttribute.varListSeparator = ',';
+			paramListAttribute.allowBitType = false;
+			paramListAttribute.needDeclarationeEndToken = false;
 			
 			compoundTypeScopeAttribute.startToken = '{';
 			compoundTypeScopeAttribute.endToken = '}';
-			compoundTypeScopeAttribute.declarationeEndToken = ';';
+			compoundTypeScopeAttribute.declarationEndToken = ';';
 			compoundTypeScopeAttribute.allowFunctionDefine = false;
 			compoundTypeScopeAttribute.allowTypeDefine = false;
 			compoundTypeScopeAttribute.allowVarList = true;
 			compoundTypeScopeAttribute.allowCompondType = true;
-			globalScopeAttribute.varListSeparator = ',';
+			compoundTypeScopeAttribute.varListSeparator = ',';
+			compoundTypeScopeAttribute.allowBitType = true;
+			compoundTypeScopeAttribute.needDeclarationeEndToken = true;
+			compoundTypeScopeAttribute.needNewLine = true;
 		}
 		Byte getIndex(const char *name) const{
 			Map::const_iterator pos = keywordList.find(name);
@@ -92,7 +100,9 @@ namespace{
 }
 
 Keyword::Keyword(const char *name){
-	index = instance.getIndex(name);
+	index = Keyword::INVALID;
+	if(name != NULL)
+		index = instance.getIndex(name);
 }
 
 const PrimType* PrimType::intType(){
@@ -253,7 +263,7 @@ bool Lexer::readNum(BlockIterator& itor, string& ret){
 		ret.push_back(ch);
 		::strtod(ret.c_str(), &endParse);
 		if(*endParse){
-			ret.pop_back();
+			ret.erase(ret.size() - 1, 1);
 			break;
 		}
 		itor = tmp;
@@ -548,7 +558,7 @@ bool Modifiers::check(const Type *type){
 }
 
 bool Modifiers::check(Modifiers modifiers){
-	if(modifiers.storage != this->storage || modifiers.storage * this->storage != 0)
+	if(modifiers.storage != this->storage && modifiers.storage * this->storage != 0)
 		return false;
 	if((modifiers.signedBit | this->signedBit) == 1
 		&&((modifiers.unsignedBit | this->unsignedBit) == 1))
@@ -557,28 +567,6 @@ bool Modifiers::check(Modifiers modifiers){
 		&& (modifiers.longBit1 | modifiers.longBit2 | this->longBit1 | this->longBit2) == 1)
 		return false;
 	return true;
-}
-static bool setNodeType(Type *type, Node *node){
-	PointerType *pointer = dynamic_cast<PointerType*>(node);
-	if(pointer != NULL){
-		if(pointer->getSrcType() != NULL){
-			cerr << "type already specified" << endl;
-			return false;
-		}
-		pointer->setSrcType(type);
-		return true;
-	}
-	Declaration *declare = dynamic_cast<Declaration*>(node);
-	if(declare != NULL){
-		if(declare->getType() != NULL){
-			cerr << "type already specified" << endl;
-			return false;
-		}
-		declare->setType(type);
-		return true;
-	}
-	cerr << "unexpected node type found" << endl;
-	return false;
 }
 
 Macro *GlobalScope::findMacro(const std::string& macro){
@@ -594,13 +582,46 @@ std::pair<Macro*,int> GlobalScope::findMacroIndex(const std::string& macro){
 	}
 	return make_pair(dynamic_cast<Macro*>(nodes[pos->second]), pos->second);
 }
-Type *GlobalScope::findType(const std::string& name){
+Type *Scope::findType(const std::string& name, unsigned int level){
+	if(parent != NULL && level > 0){
+		return parent->findType(name, level - 1);
+	}
+	for(size_t i = 0;i < nodes.size();++ i){
+		Node *node = nodes[i];
+		NamedCompoundType *namedType = dynamic_cast<NamedCompoundType*>(node);
+		if(namedType != NULL && namedType->getName() == name)
+			return namedType;
+		Typedef *td = dynamic_cast<Typedef*>(node);
+		if(td != NULL && td->getName() == name)
+			return td;
+	}
+	return NULL;
+}
+Node *Scope::findDeclare(const std::string& name, unsigned int level){
+	if(parent != NULL && level > 0){
+		return parent->findDeclare(name, level - 1);
+	}
+	for(size_t i = 0;i < nodes.size();++ i){
+		Node *node = nodes[i];
+		NamedCompoundType *namedType = dynamic_cast<NamedCompoundType*>(node);
+		if(namedType != NULL && namedType->getName() == name)
+			return namedType;
+		Declaration *dec = dynamic_cast<Declaration*>(node);
+		if(dec != NULL && dec->getName() == name)
+			return dec;
+		Typedef *td = dynamic_cast<Typedef*>(node);
+		if(td != NULL && td->getName() == name)
+			return td;
+	}
+	return NULL;
+}
+Type *GlobalScope::findType(const std::string& name, unsigned int level){
 	map<string, int>::iterator pos = declares.find(name);
 	if(pos == declares.end())
 		return NULL;
 	return dynamic_cast<Type*>(nodes[pos->second]);
 }
-Node *GlobalScope::findDeclare(const std::string& name){
+Node *GlobalScope::findDeclare(const std::string& name, unsigned int level){
 	map<string, int>::iterator pos = declares.find(name);
 	if(pos == declares.end())
 		return NULL;
@@ -621,7 +642,15 @@ void Declaration::toString(string& str)const {
 	tmp += name;
 	if(type != NULL)
 		type->toString(tmp);
-	str.swap(tmp);
+	str.clear();
+	modifiers.toString(str);
+	if(str.empty())
+		str.swap(tmp);
+	else{
+		if(!tmp.empty() && !::isspace(tmp[0]))
+			str.push_back(' ');
+		str += tmp;
+	}
 }
 void Macro::toString(std::string& str)const {
 	str += "\n#define ";
@@ -641,83 +670,139 @@ void Comment::toString(std::string& str)const {
 	str += content;
 	str += "*/";
 }
-void Modifiers::toString(std::string& str){
+void Modifiers::toString(std::string& str)const{
 	string& tmp = str;
 	if(isAuto()){
 		tmp += Keyword::autoKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isStatic()){
 		tmp += Keyword::staticKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isRegister()){
 		tmp += Keyword::registerKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isTypedef()){
 		tmp += Keyword::typedefKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isExtern()){
 		tmp += Keyword::externKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 
 
 	if(isConst()){
 		tmp += Keyword::constKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isVolatile()){
 		tmp += Keyword::volatileKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isLong1()){
 		tmp += Keyword::longKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isLong2()){
 		tmp += Keyword::longKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isShort()){
 		tmp += Keyword::shortKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isSigned()){
 		tmp += Keyword::signedKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 	if(isUnsigned()){
 		tmp += Keyword::unsignedKeyword().name();
-		tmp.push_back(' ');
+		if(::isspace(tmp[tmp.size() - 1]))
+			tmp.push_back(' ');
 	}
 }
 void PrimType::toString(std::string& str)const {
 	string tmp;
 	tmp += keyword.name();
-	tmp.push_back(' ');
+	if(!str.empty() && !::isspace(str[0]))
+		tmp.push_back(' ');
 	tmp += str;
 	tmp.swap(str);
 }
 void PointerType::toString(std::string& str)const {
 	string tmp;
+	bool needBracket = false;
+	const ModifiedType *modType = dynamic_cast<const ModifiedType*>(srcType);
+	if(modType != NULL)
+		needBracket = (dynamic_cast<const ArrayType*>(modType->getUnModifiedType()) != NULL);
+	else if(dynamic_cast<const ArrayType*>(srcType) != NULL)
+		needBracket = true;
+	if(needBracket)
+		tmp.push_back('(');
 	tmp.push_back('*');
 	tmp += str;
+	if(needBracket)
+		tmp.push_back(')');
 	if(srcType != NULL){
 		srcType->toString(tmp);
 	}
 	str.swap(tmp);
 }
 void ArrayType::toString(std::string& str)const{
-	str += "[]";
+	str += "[";
+	str += this->arraySize;
+	str += "]";
 	if(srcType != NULL){
 		srcType->toString(str);
 	}
 }
-
-void ParameterList::toString(std::string& str)const {
+void Scope::toString(std::string& str) const{
+	string tmp;
+	if(att->endToken != Lexer::END)
+		tmp.push_back(att->startToken);
+	if(!tmp.empty() && tmp[tmp.size() - 1] != '\n' && att->needNewLine)
+			tmp.push_back('\n');
+	for(size_t i = 0;i < nodes.size();++ i){
+		if(nodes[i] == NULL)
+			continue;
+		string one;
+		Typedef *td = dynamic_cast<Typedef*>(nodes[i]);
+		if(td != NULL)
+			td->getDefinition(one);
+		else{
+			NamedCompoundType *namedType = dynamic_cast<NamedCompoundType*>(nodes[i]);
+			if(namedType != NULL)
+				namedType->getDefinition(one);
+			else
+				nodes[i]->toString(one);
+		}
+		if(dynamic_cast<Comment*>(nodes[i]) == NULL && dynamic_cast<Macro*>(nodes[i]) == NULL && 
+			(i != nodes.size() - 1 || att->needDeclarationeEndToken) )
+			one.push_back(att->declarationEndToken);
+		tmp += one;
+		if(!tmp.empty() && tmp[tmp.size() - 1] != '\n' && att->needNewLine)
+			tmp.push_back('\n');
+	}
+	if(str.empty())
+		str.swap(tmp);
+	else
+		str += tmp;
+	if(att->endToken != Lexer::END)
+		str.push_back(att->endToken);
 }
 void FunctionType::toString(std::string& str)const {
 	string tmp;
@@ -728,24 +813,91 @@ void FunctionType::toString(std::string& str)const {
 	}else{
 		tmp += str;
 	}
-	tmp.push_back('(');
 	if(params != NULL)
 		params->toString(tmp);
 	else
-		tmp += "void";
-	tmp.push_back(')');
+		tmp += "(void)";
 	retType->toString(tmp);
 	str.swap(tmp);
 }
 void Typedef::toString(std::string& str) const{
-	string tmp;
-	if(!tmp.empty())
+	string tmp = name;
+	if(!str.empty() && !::isspace(str[0]))
 		tmp.push_back(' ');
-	tmp += name;
-	tmp.push_back(' ');
 	tmp += str;
 	str.swap(tmp);
 }
+void ModifiedType::toString(std::string& str) const{
+	string tmp;
+	this->modifiers.toString(tmp);
+	if(!str.empty() && !::isspace(str[0]))
+		tmp.push_back(' ');
+	tmp += str;
+	if(this->srcType != NULL)
+		srcType->toString(tmp);
+	str.swap(tmp);
+}
+void BitsType::toString(std::string& str) const{
+	string tmp = "int";
+	if(!str.empty() && !::isspace(str[0]))
+		tmp.push_back(' ');
+	tmp += str;
+	tmp += bitLen;
+	tmp.swap(str);
+}
+void AnonymousCompoundType::toString(std::string& str) const{
+	string tmp("struct ");
+	scope->toString(tmp);
+	tmp += str;
+	str.swap(tmp);
+}
+void NamedCompoundType::toString(std::string& str) const{
+	string tmp("struct ");
+	tmp += name;
+	if(!str.empty() && !::isspace(str[0]))
+		tmp.push_back(' ');
+	tmp += str;
+	str.swap(tmp);
+}
+
+void Typedef::getDefinition(std::string& str) const{
+	Declaration dec(name, srcType);
+	Modifiers modifiers;
+	modifiers.add(Modifier(Keyword::typedefKeyword()));
+	dec.setModifiers(modifiers);
+	dec.toString(str);
+}
+void NamedCompoundType::getDefinition(std::string& str) const{
+	string tmp("struct ");
+	tmp += name;
+	scope->toString(tmp);
+	str += tmp;
+}
+void EnumType::getDefinition(std::string& str) const{
+	string tmp("enum ");
+	str += "enum ";
+	tmp += name;
+	tmp.push_back('{');
+	str += definition;
+	str.push_back('}');
+}
+void EnumType::toString(std::string& str)const{
+	if(name.empty()){
+		string tmp("enum {");
+		tmp += definition;
+		tmp += "}";
+		tmp += str;
+		str.swap(tmp);
+	}else{
+		string tmp("enum ");
+		tmp += name;
+		if(!str.empty() && !::isspace(str[0]))
+			tmp.push_back(' ');
+		tmp += str;
+		str.swap(tmp);
+	}
+}
+/****************************************************************************/
 HeaderParser::HeaderParser(const Byte *start, const Byte *end) : 
 	block(start, end), currentScope(NULL), globalScope(NULL), lexer(NULL), isParsed(false){
 }
@@ -771,14 +923,60 @@ int HeaderParser::getToken(){
 	return getToken(lexer->getToken());
 }
 
+bool CompoundTypeScope::add(Node *node){
+	NamedCompoundType *namedType = dynamic_cast<NamedCompoundType*>(node);
+	if(namedType != NULL){
+		map<string, int>::iterator pos = declares.find(namedType->getName());
+		if(pos == declares.end()){
+			declares[namedType->getName()] = nodes.size();
+			nodes.push_back(namedType);
+			return true;
+		}
+	}
+	Declaration *dec = dynamic_cast<Declaration*>(node);
+	if(dec != NULL){
+		map<string, int>::iterator pos = declares.find(dec->getName());
+		if(pos == declares.end()){
+			declares[dec->getName()] = nodes.size();
+			nodes.push_back(dec);
+			return true;
+		}
+	}
+	AnonymousCompoundType *anonymousType = dynamic_cast<AnonymousCompoundType*>(node);
+	if(anonymousType != NULL){
+		nodes.push_back(node);
+		return true;
+	}
+	Comment *comment = dynamic_cast<Comment*>(node);
+	if(comment != NULL){
+		nodes.push_back(node);
+		return true;
+	}
+	assert(false);
+	return false;
+}
+Type *CompoundTypeScope::findType(const std::string& name, unsigned int level){
+	map<string, int>::iterator pos = declares.find(name);
+	if(pos == declares.end())
+		return level == 0 ? NULL : Scope::findType(name, level - 1);
+	return dynamic_cast<Type*>(nodes[pos->second]);
+}
+Node *CompoundTypeScope::findDeclare(const std::string& name, unsigned int level){
+	map<string, int>::iterator pos = declares.find(name);
+	if(pos == declares.end())
+		return level == 0 ? NULL : Scope::findDeclare(name, level - 1);
+	return nodes[pos->second];
+}
 bool GlobalScope::add(Node *node){
+	if(nodes.size() == 6227)
+		cout << "this is a test" << endl;
 	Macro *macro = dynamic_cast<Macro*>(node);
 	if(macro != NULL)
 	{
 		map<string, int>::iterator pos = macros.find(macro->name);
 		if(pos == macros.end()){
 			macros[macro->name] = nodes.size();
-			nodes.push_back(node);
+			nodes.push_back(macro);
 			return true;
 		}
 	}
@@ -790,6 +988,11 @@ bool GlobalScope::add(Node *node){
 			nodes.push_back(namedType);
 			return true;
 		}
+	}
+	AnonymousCompoundType *anonymousType = dynamic_cast<AnonymousCompoundType*>(node);
+	if(anonymousType != NULL){
+		nodes.push_back(anonymousType);
+		return true;
 	}
 	Declaration *dec = dynamic_cast<Declaration*>(node);
 	if(dec != NULL){
@@ -811,9 +1014,14 @@ bool GlobalScope::add(Node *node){
 	}
 	Comment *comment = dynamic_cast<Comment*>(node);
 	if(comment != NULL){
-		nodes.push_back(node);
+		nodes.push_back(comment);
 		return true;
 	}
+  EnumType *enumType = dynamic_cast<EnumType*>(node);
+  if (enumType != NULL){
+    nodes.push_back(enumType);
+    return true;
+  }
 	assert(false);
 	return false;
 }
@@ -828,6 +1036,8 @@ void HeaderParser::reportError(const char *msg, int exitCode){
 
 bool HeaderParser::expandMacro(Macro *macro){
 	if(macro != NULL){
+		if(macro->content.empty())
+			return true;
 		MacroExpansion macroExpansion(macro, this->globalScope, this->lexer);
 		string result;
 		if(!macroExpansion.expandMacro(result)){
@@ -835,9 +1045,10 @@ bool HeaderParser::expandMacro(Macro *macro){
 			return false;
 		}
 		Utility::trim(result);
-		if(!macroExpansion.changed() && !macro->content.empty())
+		if(!macroExpansion.changed() && !macro->content.empty()){
 			blocks.push_back(Block((const Byte*)macro->content.c_str(), (const Byte*)macro->content.c_str() + macro->content.size(), 
 				(int)Block::NOT_UPDATE_POS | (int)Block::IS_MACRO_EXPANSION));
+		}
 		else if(!result.empty()){
 			expandedMacros.push_back(std::string());
 			string& str = expandedMacros.back();
@@ -845,6 +1056,7 @@ bool HeaderParser::expandMacro(Macro *macro){
 			blocks.push_back(Block((const Byte*)str.c_str(), (const Byte*)str.c_str() + str.size(), 
 				(int)Block::NOT_UPDATE_POS | (int)Block::IS_MACRO_EXPANSION));
 		}
+		blocks.back().setStartPosition(lexer->getPosition());
 		lexer->iterator().split(&blocks.back());
 			return true;
 	}
@@ -853,12 +1065,10 @@ bool HeaderParser::expandMacro(Macro *macro){
 int HeaderParser::parseMacro(){
 		int token = lexer->getToken();
 		if(token != Lexer::IDENTIFIER){
-				reportError("macro definition expects an identifier");
-				exit(__LINE__);
+				reportError("macro definition expects an identifier", __LINE__);
 		}
 		if(globalScope->findMacro(lexer->getTokenContent()) != NULL){
-				reportError("macro redefined");
-				exit(__LINE__);
+				reportError("macro redefined", __LINE__);
 		}
 		Macro *p = new Macro;
 		int ch = lexer->peek();
@@ -873,39 +1083,33 @@ int HeaderParser::parseMacro(){
 				token = lexer->getToken();
 				while(token != ')' && token != Lexer::NEWLINE){
 					if(token != Lexer::IDENTIFIER){
-						reportError("identifier expected, invalid macro definition");
-						exit(__LINE__);
+						reportError("identifier expected, invalid macro definition", __LINE__);
 					}
 					p->params.push_back(string());
 					p->params.back().swap(lexer->getTokenContent());
 					if(p->params.end() != ::find(p->params.begin(), p->params.end(), lexer->getTokenContent())){
-						reportError("duplicate parameter name  in macro");
-						exit(__LINE__);
+						reportError("duplicate parameter name  in macro", __LINE__);
 					}
 					token = lexer->getToken();
 					if(token == ','){
 						token = lexer->getToken();
 						if(token != Lexer::IDENTIFIER){
-							reportError("invalid macro definition");
-							exit(__LINE__);
+							reportError("invalid macro definition", __LINE__);
 						}
 					}
 				}
 				if(token == Lexer::NEWLINE){
-					reportError("')' expected, invalid macro definition");
-					exit(__LINE__);
+					reportError("')' expected, invalid macro definition", __LINE__);
 				}
 				lexer->skipToEndOfLine(p->content);
 		}else{
-				reportError("unexpected macro definition");
-				exit(__LINE__);
+				reportError("unexpected macro definition", __LINE__);
 		}
 		globalScope->add(p);
 		return getToken();
 }
 void HeaderParser::includeFile(const char *fileName){
-	static string baseDir = "D:\\C++\\Source\\Include\\";
-
+	static string baseDir = "D:\\";
 	map<string, string>::iterator pos = fileContents.find(fileName);
 	const char *start = NULL;
 	const char *end = NULL;
@@ -933,8 +1137,8 @@ void HeaderParser::includeFile(const char *fileName){
 		lexer->iterator().split(&blocks.back());
 	}
 }
-int HeaderParser::skipBraces(char ch){
-	vector<char> str;
+int HeaderParser::skipBraces(char ch, std::string* s){
+	string str;
 	str.push_back(ch);
 	int token = getToken();
 	while(token != Lexer::END){
@@ -942,445 +1146,643 @@ int HeaderParser::skipBraces(char ch){
 			case '(':case '[':case '{':
 				str.push_back(token);break;
 			case ')':case ']':case '}':{
-				char expected = Utility::getMatchedBrace(str.back());
+				char expected = Utility::getMatchedBrace(str[str.size() - 1]);
 				if(expected != token){
 					reportError("unmatched right brace found");
 					exit(__LINE__);
 				}
-				str.pop_back();
+				str.erase(str.size() - 1, 1);
 				break;
 			}
 		}
 		if(str.empty())
 			break;
+		if(s != NULL)
+			lexer->toString(token, *s);
 		token = getToken();
 	}
 	if(token == Lexer::END){
-		reportError("right brace expected");
-		exit(__LINE__);
+		reportError("right brace expected", __LINE__);
 	}
 	return getToken();
 }
 
-int HeaderParser::parseVariableList(int token, ModifiedType *type){
-	Modifiers storage = type->getModifiers();
-	Modifiers modifiers;
-	ModifiedType *decType = type;
-	Node *decNode = NULL;
-	const Scope::ScopeAttribute *att = this->currentScope->getAttribute();
-	while(token != att->declarationeEndToken && token != att->endToken && token != Lexer::END){
-start:
-		switch(token){
-			case '*':
-				if(decNode != NULL){
-					reportError("'*' not allowed", __LINE__);break;
-				}
-				decType->setModifiers(modifiers);
-				decType = new ModifiedType(new PointerType(decType));
-				modifiers = Modifiers();
-				token = getToken();
+class HeaderParser::DeclarationParser{
+	ModifiedType *type;
+	Modifiers storage;
+	HeaderParser *headerParser;
+	const Scope::ScopeAttribute *att;
+	int currentToken;
+	bool hasDefinition;
+	void getModifiers(Modifiers& modifiers, const Type *type){
+		while(currentToken == Lexer::IDENTIFIER){
+			Keyword keyword(headerParser->lexer->getTokenContent().c_str());
+			if(!keyword.modiferCatetory().isValid())
 				break;
-			case '(':{
-				//could be type or declaration
-				if(decNode != NULL){
-					reportError("'(' not allowed", __LINE__);break;
-				}
-				Node *outterMost = NULL;
-				Node *innerMost = NULL;
-				token = parseDeclares(innerMost, outterMost);
-				token = parsePostDeclarator(token, decType);
-				if(!setNodeType(decType, outterMost)){
-					reportError("error occured", __LINE__);break;
-				}
-				FunctionType *funcType = NULL;
-				Declaration *declare = dynamic_cast<Declaration*>(innerMost);
-				if(declare != NULL)
-					funcType = dynamic_cast<FunctionType *>(declare->getType());
-				else {
-					ModifiedType *tmpType = dynamic_cast<ModifiedType*>(innerMost);
-					if(tmpType != NULL)
-						decType = tmpType;
-					funcType = dynamic_cast<FunctionType *>(innerMost);
-				}
-				if(funcType != NULL){
-					if(storage.isStorageSet() && !storage.isStatic() && !storage.isExtern()){
-						reportError("storage type not allowed for function definition", __LINE__);break;
-					}
-					if(declare == NULL){
-						reportError("function defintion requires a function name ", __LINE__);break;
-					}
-					decNode = new FunctionDeclaration(declare->getName(), funcType);
-				}else if(declare != NULL){
-					if(storage.isTypedef()){
-						decNode = new Typedef(declare->getName(), declare->getType());
-					}else{
-						decNode = new VariableDeclaration(declare->getName(), declare->getType());
-					}
-				}
-				if(token == '='){
-					if(storage.isTypedef()){
-						reportError("could not initialize a typedef", __LINE__);break;
-					}
-					if(!att->allowInitialization){
-						reportError("could not initialize a member or formal parameter", __LINE__);break;
-					}
-					token = getToken();
-					while(token != att->endToken && token != att->varListSeparator &&
-						token != att->declarationeEndToken && token != Lexer::END)
-						token =  getToken();
-					}
-				if(funcType && token != att->declarationeEndToken){
-					reportError("syntax error", __LINE__);
-				}
-				break;
+			Modifier modifier(keyword);
+			//check modifier compatibility
+			if(!modifiers.add(modifier)){
+				headerParser->reportError("incompatible modifier", __LINE__);
 			}
-			case Lexer::IDENTIFIER:{
-				if(decNode != NULL){
-					reportError("identifier not allowed", __LINE__);break;
-				}
-				string name;
-				name.swap(lexer->getTokenContent());
-				Keyword keyword(name.c_str());
-				switch(keyword.category().getIndex()){
-					case KeywordCategory::MODIFIER:{
-						Modifier modifier(keyword);
-						if(modifier.category() != ModifierCategory::cv()){
-							reportError("syntax error, invalid identifier found", __LINE__);break;
-						}
-						if(!modifiers.add(Modifier(keyword))){
-							reportError("incompatible modifier", __LINE__);break;
-						}
-						if(!modifiers.check(decType)){
-							reportError("modifiers incompatible with type", __LINE__);break;
-						}
-						token = getToken();
-						break;
-					}
-					case KeywordCategory::INVALID:{	
-						if(currentScope->findDeclare(name) != NULL){
-							reportError("duplicate declaration of identifier", __LINE__);break;
-						}
-						if(decType != type){
-							decType->setModifiers(modifiers);
-							modifiers = Modifiers();
-						}			
-						token = getToken();
-						if(token == ':'){
-							cerr << "bit type here" << endl;
-						}else{
-							token = parsePostDeclarator(token, decType);
-						}
-						FunctionType *funcType = dynamic_cast<FunctionType*>(decType);						
-						if(funcType != NULL){
-							if(storage.isStorageSet() && !storage.isStatic() && !storage.isExtern()){
-								reportError("storage type not allowed for function definition", __LINE__);break;
-							}
-							decNode = new FunctionDeclaration(name, funcType);							
-						}else{
-							if(storage.isTypedef()){
-								decNode = new Typedef(name, decType);
-							}else{
-								decNode = new VariableDeclaration(name, decType);
-							}
-						}
-						if(token == '='){
-							if(storage.isTypedef()){
-								reportError("could not initialize a typedef", __LINE__);break;
-							}
-							if(att->allowInitialization){
-								reportError("initialization not allowed", __LINE__);break;
-							}
-							token = getToken();
-							while(token != att->declarationeEndToken && 
-								token != att->varListSeparator && token != att->endToken && token != Lexer::END)
-								token =  getToken();
-						}
-						if(funcType && (att->allowFunctionDefine || token != att->declarationeEndToken)){
-								reportError("syntax error", __LINE__);break;
-						}
-						break;
-					}
-					default:
-						reportError("syntax error, invalid token found", __LINE__);break;
-				}
-			}
-			break;
-			case '[':
-				token = parsePostDeclarator(token, decType);
-				break;
-			default:
-				if(token == att->varListSeparator){
-					if(!att->allowVarList){
-						reportError("only one variable allowed", __LINE__);break;
-					}
-					if(decNode != NULL){
-						currentScope->add(decNode);
-						decNode = NULL;
-					}else{
-						currentScope->add(decType);
-					}
-					decType = type;
-					modifiers = Modifiers();
-					token = getToken();
-					goto start;
-				}
-				reportError("syntax error", __LINE__);
-		}
-	}
-	if(decNode != NULL)
-		currentScope->add(decNode); 
-	else{
-		currentScope->add(decType);
-	}
-	return token;
-	return 0;
-}
-
-int HeaderParser::parseDeclares(Node *&innerMost, Node *&outterMost){
-	int token = getToken();
-	Modifiers modifiers;
-	ModifiedType *tmpType = new ModifiedType(NULL);
-	while(token != Lexer::END && token != ')'){
-		switch(token){
-			case '*':{
-				tmpType->setType(new PointerType(tmpType));
-				tmpType->setModifiers(modifiers);
-				modifiers = Modifiers();
-				if(outterMost == NULL)
-					outterMost = tmpType;
-				innerMost = tmpType;
-				token = getToken();
-				break;
-			}
-			case '(':{
-				Node *outterTemp = NULL;
-				token = parseDeclares(innerMost, outterTemp);
-				token = parsePostDeclarator(token, tmpType);
-				if(outterMost == NULL)
-					outterMost = outterTemp;
-				if(!setNodeType(tmpType, outterTemp)){
-					reportError("error occured", __LINE__);break;
-				}
-				if(token != ')'){
-					reportError("')' expected", __LINE__);break;
-				}
-				break;
-			}
-			case '[':{
-				if(tmpType->getType() == NULL){
-					reportError("unexpected token '['", __LINE__);break;
-				}
-				//void (*(*func)(int, int)[])(int, int) is invalid;
-				if(dynamic_cast<const FunctionType*>(tmpType->getType()) != NULL){
-					reportError("array of function type is not allowned", __LINE__);break;
-				}
-				tmpType->setType(new ArrayType(tmpType->getType()));
-				token = skipBraces('[');
-				break;
-			}
-			case Lexer::IDENTIFIER:{
-				string name;
-				name.swap(lexer->getTokenContent());
-				Keyword keyword(name.c_str());
-				switch(keyword.category().getIndex()){
-					case KeywordCategory::MODIFIER:{
-						Modifier modifier(keyword);
-						if(modifier.category() != ModifierCategory::cv()){
-							reportError("syntax error, modifier not allowed", __LINE__);break;
-						}
-						if(!modifiers.add(Modifier(keyword))){
-							reportError("incompatible modifier at line ", __LINE__);
-						}
-						if(tmpType == NULL){
-							reportError("modifier not allowed", __LINE__);break;
-						}
-						if(!modifiers.check(tmpType)){
-							reportError("modifiers incompatible with type", __LINE__);break;
-						}
-						tmpType->setModifiers(modifiers);
-						token = getToken();
-						break;
-					}
-					case KeywordCategory::INVALID:{	
-						if(currentScope->findDeclare(name) != NULL){
-							reportError("duplicate declaration of identifier ", __LINE__);
-							break;
-						}
-						token = getToken();
-						token = parsePostDeclarator(token, tmpType);
-						FunctionType *funcType = dynamic_cast<FunctionType*>(tmpType);
-						Node *declare = new Declaration(name, tmpType);
-						if(token != ')'){
-							reportError("')' expected", __LINE__);
-							break;
-						}
-						if(outterMost == NULL)
-							outterMost = declare;
-						innerMost = declare;
-						break;
-					}
-					default:
-						reportError("syntax error, identifier not allowed", __LINE__);
-				}
-			}
-			break;
-			default:break;
-		}
-	}
-	return getToken();
-}
-
-int HeaderParser::parsePostDeclarator(int token, ModifiedType *&type){
-	if(token == '('){
-		ParameterList *node = new ParameterList(currentScope, &paramListAttribute);
-		currentScope = node;
-		token = getToken();
-		while(token == Lexer::IDENTIFIER){
-				token = parseDeclaration();
-		}
-		currentScope = node->getParent();
-		type = new ModifiedType(new FunctionType(type, node));
-		return token;
-	}
-	while(token == '['){
-		type->setType(new ArrayType(type->getType()));
-		token = skipBraces('[');
-	}
-	return token;
-}
-int HeaderParser::parseDefinition(Type **type){
-	int token = getToken();
-	CompoundType *compoundType = NULL;
-	ScopeAttribute *att = currentScope->getAttribute();
-	while(token != Lexer::END){
-		if(token == Lexer::IDENTIFIER){
-			Node *node = findDeclare(lexer->getTokenContent());
-			if(node == NULL){
-				compoundType = new NamedCompoundType(lexer->getTokenContent());
-				add(compoundType);
-			}else{
-				compoundType = dynamic_cast<CompoundType*>(node);
-				if(compoundType == NULL){
-					reportError("identifier redefined", __LINE__);break;
-				}
-			}
-			token = getToken();
-		}
-		if(token == '{'){
-			if(att->allowCompondType){
-				reportError("struct definition not allowed", __LINE__);break;
-			}
-			if(compoundType == NULL)
-				compoundType = new AnonymousCompoundType();
-			if(compoundType->isDefined()){
-				reportError("identifier redefined", __LINE__);break;
-			}
-			Scope *tmpNode = new ;
-			currentNode = compoundType;
-			token = getToken(lexer);
-			while(token == Lexer::IDENTIFIER){
-				token = parseDeclaration(lexer);
-			}
-			currentNode = tmpNode;
-			if(token != '}'){
-				cerr << "'}' expected at line " << lexer.getLineNo() << endl;
-				exit(__LINE__);
-			}
-			token = getToken(lexer);
-			compoundType->setDefined(true);
-		}
-	//}
-	*type = compoundType;
-	if(*type == NULL){
-		cerr << "type required at line " << lexer.getLineNo() << endl;
-		exit(__LINE__);
-	}
-	return token;
-}
-int HeaderParser::parseDeclaration(){ 
-	int token = Lexer::IDENTIFIER;
-	Modifiers modifiers;
-	ModifiedType *type = NULL;
-	const string& name = lexer->getTokenContent();
-	bool hasVarList = false;
-	const Scope::ScopeAttribute *att = this->currentScope->getAttribute();
-	while(token != ';' && token != att->declarationeEndToken
-		&& token != att->endToken && token != Lexer::END){
-		bool isVarList = true;
-		if(token == Lexer::IDENTIFIER){
-				Keyword keyword(name.c_str());
-				isVarList = false;
-				switch(keyword.category().getIndex()){
-					case KeywordCategory::OPTER:
-					case KeywordCategory::CONTROL: reportError("keyword  unexpected", __LINE__);break;
-					case KeywordCategory::MODIFIER:{
-						if(keyword == Keyword::autoKeyword() || keyword == Keyword::registerKeyword() || !modifiers.add(Modifier(keyword))){
-							reportError("modifier not allowed", __LINE__);break;
-						}
-						break;
-					}
-					case KeywordCategory::PRIM:
-						if(type != NULL){
-							reportError("multiple type specified", __LINE__);
-							delete type;break;
-						}
-						{
-							const PrimType * primType = PrimType::get(keyword);
-							assert(primType != NULL);
-							if(!modifiers.check(primType)){
-								reportError("modifiers incompatible with type", __LINE__);break;
-							}
-							type = new ModifiedType(primType);
-						}
-						break;
-					case KeywordCategory::METATYPE:{
-						Type *tmpType = NULL;
-						token = parseDefinition(&tmpType);
-						assert(tmpType != NULL);
-						type = new ModifiedType(tmpType);
-						continue;
-					}
-					case KeywordCategory::INVALID:{
-						bool isType = false;
-						if(type == NULL){
-							const Type *tmpType = currentScope->findType(name);
-							isType = (tmpType != NULL);
-							if(!isType){
-								if(modifiers.hasIntModifiers()){
-									tmpType = PrimType::intType();
-									assert(tmpType != NULL);
-								}
-							}
-							if(tmpType == NULL){
-									reportError("unexpected indentifier, type required", __LINE__);break;
-							}
-						}
-						isVarList = !isType;
-					}
-				}
+			currentToken = headerParser->getToken();
 		}
 		
-		if(isVarList){
-			if(type == NULL && modifiers.hasIntModifiers()){
-					const PrimType * primType = PrimType::intType();
-					assert(primType != NULL);
-					type = new ModifiedType(primType);
-			}
-			if(!type->setModifiers(modifiers)){
-				reportError("modifiers incompatible with type", __LINE__);
-			}
-			hasVarList = true;
-			token = parseVariableList(token, type);
-			modifiers = Modifiers();
-			type = NULL;
-			continue;
+		//check modifier compatibility with type
+		if(type != NULL && !modifiers.check(type)){
+			headerParser->reportError("modifiers incompatible with type", __LINE__);
 		}
-		token = getToken();
+
+		//check modifier compatibility with scope attribute
 	}
-	if(!hasVarList){
-		currentScope->add(type);
+	ParameterList *parseParamList(){
+		//parse function paramter list
+		ParameterList *paramList = new ParameterList(headerParser->currentScope, &paramListAttribute);								
+		headerParser->currentScope = paramList;
+		this->att = headerParser->currentScope->getAttribute();		
+		currentToken = headerParser->getToken();
+		while(currentToken == Lexer::IDENTIFIER){
+			currentToken = headerParser->parseDeclaration();
+			if(currentToken == att->endToken)
+				break;
+			if(currentToken != att->declarationEndToken)
+				headerParser->reportError("',' expected", __LINE__);
+			currentToken = headerParser->getToken();
+		}
+		if(currentToken != att->endToken){
+			headerParser->reportError("')' expected", __LINE__);
+		}
+		headerParser->currentScope = paramList->getParent();
+		this->att = headerParser->currentScope->getAttribute();
+		currentToken = headerParser->getToken();
+		return paramList;
 	}
-	return token;
+	//type : modified type, function type, pointer type, bit type, array type.
+	bool setNodeType(Type *type, Type *node){
+		ModifiedType *modType = dynamic_cast<ModifiedType*>(type);
+		if(modType != NULL)
+			return setNodeType(const_cast<Type*>(modType->getType()), node);
+		modType = dynamic_cast<ModifiedType*>(node);
+		if(modType != NULL)
+			return setNodeType(type, const_cast<Type*>(modType->getType()));
+		FunctionType *funcType = dynamic_cast<FunctionType*>(type);
+		if(funcType != NULL){
+			assert(funcType->getRetType() == NULL);
+			funcType->setRetType(node);
+			return true;
+		}
+		PointerType *pointerType = dynamic_cast<PointerType*>(type);
+		if(pointerType != NULL){
+			pointerType->setSrcType(node);
+			return true;
+		}
+		BitsType *bitsType = dynamic_cast<BitsType*>(type);
+		if(bitsType != NULL){
+			const PrimType *primType = dynamic_cast<const PrimType*>(node);	
+			Keyword keyword;
+			if(primType != NULL)
+				keyword = primType->getKeyword();
+			if(keyword != Keyword::intKeyword() &&
+				keyword != Keyword::charKeyword()){
+				headerParser->reportError("integeral type expected!");
+				return false;
+			}
+			return true;
+		}
+		return false;
+	}
+	//innerMost, possibilities : (variable or function) declaration, function type, pointer type, bit type, array type.
+	//ouuterMost, possibilities : (variable or function) declaration, function type, pointer type, bit type, array type.
+	void parseInBracket(Node *&innerMost, Node *&outterMost){
+		/****************start************************/		
+		//pointer type
+		Declaration *declaration = NULL;
+		ModifiedType *declaredType = NULL;
+		currentToken = headerParser->getToken();
+		while(currentToken == '*'){
+			Modifiers modifiers;
+			PointerType *pType = new PointerType(declaredType);
+			currentToken = headerParser->getToken();
+			getModifiers(modifiers, pType);
+			declaredType = new ModifiedType(pType);
+			declaredType->setModifiers(modifiers);
+			if(outterMost == NULL)
+				outterMost = declaredType;
+		}
+		if(!isEnd()){
+			Node *outterNode = NULL, *innerNode = NULL;
+			if(currentToken == '('){
+				parseInBracket(innerNode, outterNode);
+				if(outterNode == NULL || innerNode == NULL)
+					headerParser->reportError("syntax error", __LINE__);
+			}else if(currentToken == Lexer::IDENTIFIER){
+				const string& name = headerParser->lexer->getTokenContent();
+				Keyword keyword(name.c_str());
+				if(keyword.isValid()){
+					headerParser->reportError("unexpected keyword", __LINE__);
+				}
+				declaration = new VariableDeclaration(name, NULL);
+				currentToken = headerParser->getToken();
+			}
+			if(currentToken == '['){
+				//declaration of arrays
+				ArrayType *arType = new ArrayType(declaredType);
+				declaredType = new ModifiedType(arType);
+				//Bypass the expression that represent the size of the array.
+				while((currentToken = headerParser->skipBraces('[', &arType->arraySize)) == '['){
+					ArrayType *tmp = new ArrayType(	arType->getSrcType());
+					arType->setSrcType(tmp);
+					arType = tmp;
+				}
+				if(outterMost == NULL)
+					outterMost = arType;
+			}else if( currentToken == '('){
+				//function parameter list
+				if(declaration == NULL && innerNode == NULL && outterNode == NULL){
+					headerParser->reportError("function declaration expects a function name", __LINE__);							
+				}
+				if(hasDefinition)
+					headerParser->reportError("type definition is not allowed", __LINE__);
+				ParameterList *paramList = parseParamList();
+				FunctionType *funcType = new FunctionType(declaredType, paramList);
+				declaredType = new ModifiedType(funcType);
+				if(outterMost == NULL){
+					assert(funcType->getRetType() == NULL);
+					outterMost = declaredType;
+				}
+			}else if(currentToken == ':'){
+				//bit type
+				if(!att->allowBitType){
+					headerParser->reportError("bit type not allowed in this scope!", __LINE__);
+				}
+				if(declaredType != NULL)
+					headerParser->reportError("integeral type expected!", __LINE__);
+				assert(outterMost == NULL);
+				BitsType *bitsType = new BitsType();
+				declaredType = new ModifiedType(bitsType);
+				outterMost = declaredType;
+				string str;
+				bypassExpr(str);
+				bitsType->bitLen.swap(str);
+			}
+
+			if(declaration != NULL){
+				assert(innerNode == NULL && outterNode == NULL);
+				assert(declaration->getType() == NULL && declaredType != NULL);
+
+				const FunctionType *funcType = dynamic_cast<const FunctionType*>(declaredType->getUnModifiedType());
+				if(funcType != NULL)
+					declaration = new FunctionDeclaration(declaration->getName(), funcType);
+				else
+					declaration->setType(declaredType);
+			}else{
+				assert(innerNode != NULL && outterNode != NULL);
+				declaration = dynamic_cast<Declaration*>(outterNode);
+				if(declaration != NULL){
+					assert(innerNode == outterNode);
+					assert(declaration->getType() == NULL && declaredType != NULL);
+
+					const FunctionType *funcType = dynamic_cast<const FunctionType*>(declaredType->getUnModifiedType());
+					if(funcType != NULL)
+						declaration = new FunctionDeclaration(declaration->getName(), funcType);
+					else
+						declaration->setType(declaredType);
+				}else{
+					Type *tmpType = dynamic_cast<Type*>(outterNode);
+					if(tmpType == NULL || !setNodeType(tmpType, declaredType))
+						headerParser->reportError("syntax error", __LINE__);
+					
+					declaration = dynamic_cast<Declaration*>(innerNode);
+					if(declaration == NULL){
+						tmpType = dynamic_cast<Type*>(innerNode);
+						if(tmpType == NULL)
+							headerParser->reportError("syntax error", __LINE__);
+						declaredType = dynamic_cast<ModifiedType*>(tmpType);
+						if(declaredType == NULL)
+							declaredType = new ModifiedType(tmpType);
+					}else{
+						Type *tmpType = const_cast<Type*>(declaration->getType());
+						if(tmpType == NULL)
+							headerParser->reportError("syntax error", __LINE__);
+						declaredType = dynamic_cast<ModifiedType*>(tmpType);
+						if(declaredType == NULL)
+							declaredType = new ModifiedType(tmpType);
+					}
+				}
+			}
+			if(currentToken == '=')
+				headerParser->reportError("initialization not allowned", __LINE__);			
+		}
+		if(declaration != NULL)
+			innerMost = declaration;
+		else{
+			assert(declaredType != NULL);
+			innerMost = declaredType;
+		}
+		if(outterMost == NULL)
+			outterMost = innerMost;
+		if(currentToken != ')' || (declaredType == NULL &&  declaration == NULL))
+			headerParser->reportError("syntax error", __LINE__);
+		currentToken = headerParser->getToken();
+		/****************end************************/
+	}
+	bool isEnd(){
+		return currentToken == ';' || currentToken == att->declarationEndToken
+			|| currentToken == att->endToken || currentToken == Lexer::END;
+	}
+	bool getType(){
+		CompoundType *forwardDeclaration = NULL;
+		Modifiers modifiers;
+		{
+			getModifiers(modifiers, NULL);
+			if(currentToken == Lexer::IDENTIFIER){
+				Keyword keyword(headerParser->lexer->getTokenContent().c_str());
+				switch(keyword.category().getIndex()){
+						case KeywordCategory::OPTER:
+						case KeywordCategory::CONTROL:
+							headerParser->reportError("unexpected keyword", __LINE__); break;
+						case KeywordCategory::METATYPE:{
+							//compound type
+							CompoundType *compoundType = NULL;							
+							currentToken = headerParser->getToken();
+							if(currentToken == Lexer::IDENTIFIER){
+								Keyword name(headerParser->lexer->getTokenContent().c_str());
+								Type *tmpType = NULL;
+								if(name.isValid()){
+									headerParser->reportError("unexpected keyword", __LINE__);break;
+								}								
+								//find the compound type by name;
+								tmpType = headerParser->currentScope->findType(headerParser->lexer->getTokenContent(), -1);
+								compoundType = dynamic_cast<CompoundType*>(tmpType);
+								if(tmpType != NULL && compoundType == NULL){
+									//if this name is defined but is not a compound type
+									headerParser->reportError("conflict definition of identifier", __LINE__);break;
+								}
+								if(compoundType == NULL){
+									//if this compound type is not defined.
+									if(!(keyword == Keyword::enumKeyword()))
+										compoundType = new NamedCompoundType(headerParser->lexer->getTokenContent());
+									else
+										compoundType = new EnumType(headerParser->lexer->getTokenContent());
+									forwardDeclaration = compoundType;
+								}
+								currentToken = headerParser->getToken();
+							}
+							if(currentToken == '{'){								
+								if(compoundType == NULL){
+									//anonymouse compound type
+									if(!(keyword == Keyword::enumKeyword()))
+										compoundType = new AnonymousCompoundType();
+									else
+										compoundType = new EnumType();
+								}
+								if(compoundType->isDefined()){
+									headerParser->reportError("redefinition", __LINE__);break;
+								}
+								if(forwardDeclaration != NULL)
+									headerParser->currentScope->add(compoundType);
+								if(!(keyword == Keyword::enumKeyword())){
+									//parse definition of compound type
+									CompoundTypeScope *compoundTypeScope = new CompoundTypeScope(headerParser->currentScope, &compoundTypeScopeAttribute);								
+									headerParser->currentScope = compoundTypeScope;
+									this->att = headerParser->currentScope->getAttribute();
+									compoundType->setScope(compoundTypeScope);
+									while((currentToken = headerParser->getToken()) != att->endToken){
+										if(currentToken == att->declarationEndToken)
+											continue;
+										currentToken = headerParser->parseDeclaration();
+										if(currentToken != att->declarationEndToken){
+											headerParser->reportError("';' expected", __LINE__);break;
+										}
+									}
+									headerParser->currentScope = compoundTypeScope->getParent();
+									this->att = headerParser->currentScope->getAttribute();
+									currentToken = headerParser->getToken();
+								}else{
+									//headerParser->reportError("could not handle enum definitions", __LINE__);break;
+									EnumType *enumType = (EnumType*)compoundType;
+									currentToken = headerParser->skipBraces('{', &enumType->definition);
+								}
+								hasDefinition = true;
+								forwardDeclaration = NULL;
+							}
+							if(compoundType == NULL){
+								headerParser->reportError("missing name", __LINE__);break;
+							}
+							this->type = new ModifiedType(compoundType);
+							break;
+						}
+						case KeywordCategory::INVALID:{
+							//compound type or typedef
+							//find type by name
+							Type *tmpType = headerParser->currentScope->findType(headerParser->lexer->getTokenContent(), -1);
+							if(tmpType != NULL){
+								//identifier is a type
+								this->type = new ModifiedType(tmpType);
+								currentToken = headerParser->getToken();
+							}
+							else if(modifiers.isLong1() || modifiers.isLong2() || modifiers.isShort()
+								|| modifiers.isSigned() || modifiers.isUnsigned()){
+								//identifier is a variable name
+								this->type = new ModifiedType(PrimType::intType());
+							}
+							break;
+						}
+						case KeywordCategory::PRIM:
+							//primary type
+							this->type = new ModifiedType(PrimType::get(keyword));
+							assert(this->type->getType() != NULL);
+							currentToken = headerParser->getToken();
+							break;
+				}
+			}else{
+				//empty type specification, check modifiers,
+				//if there are "long", "short", "signed", or "unsigned", then take it as integer type.
+				if(modifiers.isLong1() || modifiers.isLong2() || modifiers.isShort()
+					|| modifiers.isSigned() || modifiers.isUnsigned())
+					this->type = new ModifiedType(PrimType::intType());
+			}
+			if(type == NULL){
+				headerParser->reportError("type expected", __LINE__);
+			}
+			getModifiers(modifiers, type->getType());
+		}
+		storage = modifiers;
+		modifiers.clearStorage();
+		storage.clearCV();
+		storage.clearSign();
+		storage.clearLength();
+		if(type != NULL){
+			if(isEnd()){
+				//check if there is a forward declaration, a forward declaration could only appear in global scope;
+				if(forwardDeclaration != NULL){
+					//forward declaration.
+					headerParser->currentScope->add(forwardDeclaration);
+				}
+				return false;				
+			}else{				
+				if(forwardDeclaration != NULL){
+					//not a forward declaration
+					if(!forwardDeclaration->isDefined())
+						headerParser->reportError("using undefined type", __LINE__);
+					else
+						headerParser->currentScope->add(forwardDeclaration);
+				}
+				this->type->setModifiers(modifiers);
+			}
+		}
+		return true;
+	}
+public:
+	DeclarationParser(HeaderParser *headerParser, int currentToken)
+		: headerParser(headerParser), currentToken(currentToken), att(NULL), hasDefinition(false){		
+	}
+	void bypassExpr(string& str){
+		string s;
+		Lexer *lexer = headerParser->lexer;
+		s.push_back(0);
+		while(currentToken != att->varListSeparator && !isEnd()){
+			switch(currentToken){
+				case '(':case '[':case '{':
+					s.push_back(currentToken);break;
+				case ')':case ']':case '}':{
+					char expected = Utility::getMatchedBrace(s[s.size() - 1]);
+					if(expected != currentToken){
+						//headerParser->reportError("unmatched right brace found");
+						//exit(__LINE__);
+						return;
+					}
+					str.erase(str.size() - 1, 1);
+					break;
+				}
+			}
+			lexer->toString(currentToken, str);
+			currentToken = headerParser->getToken();
+		}
+		if(currentToken == Lexer::END){
+			headerParser->reportError("syntax error", __LINE__);
+		}
+	}
+	int parse(){
+		type = NULL;
+		att = headerParser->currentScope->getAttribute();
+		if(getType()){
+			 parseDeclarator();
+		}else{
+			//if(!hasDefinition)
+			//	headerParser->currentScope->add(type);
+		}
+		return currentToken;
+	}
+	
+	void parseDeclarator(){
+		while(true){
+			//pointer type
+			Declaration *declaration = NULL;
+			ModifiedType *declaredType = type;
+			while(currentToken == '*'){
+				Modifiers modifiers;
+				PointerType *pType = new PointerType(declaredType);
+				currentToken = headerParser->getToken();
+				getModifiers(modifiers, pType);
+				declaredType = new ModifiedType(pType);
+				declaredType->setModifiers(modifiers);
+			}
+			if(!isEnd()){
+				Node *outterNode = NULL, *innerNode = NULL;
+				if(currentToken == '('){
+					this->parseInBracket(innerNode, outterNode);
+					if(outterNode == NULL || innerNode == NULL)
+						headerParser->reportError("syntax error", __LINE__);						
+				}else if(currentToken == Lexer::IDENTIFIER){
+					const string& name = headerParser->lexer->getTokenContent();
+					Keyword keyword(name.c_str());
+					if(keyword.isValid()){
+						headerParser->reportError("unexpected keyword", __LINE__);
+					}
+					declaration = new VariableDeclaration(name, NULL);
+					currentToken = headerParser->getToken();
+				}
+				
+				
+				if(currentToken == '['){
+					//declaration of arrays					
+					ArrayType *arType = new ArrayType(declaredType);
+					declaredType = new ModifiedType(arType);
+					//Bypass the expression that represent the size of the array.
+					while((currentToken = headerParser->skipBraces('[', &arType->arraySize)) == '['){
+						ArrayType *tmp = new ArrayType(arType->getSrcType());
+						arType = new ArrayType(tmp);
+						arType = tmp;
+					}
+				}else if( currentToken == '('){
+					//function parameter list
+					if(declaration == NULL && declaration == NULL && innerNode == NULL && outterNode == NULL){
+						//function declration must have a function name
+						//That is the following code is invalid
+						// void *(int, int);
+						//should be:
+						//void *func(int, int);
+						headerParser->reportError("function declaration expects a function name", __LINE__);							
+					}
+					if(hasDefinition)
+						headerParser->reportError("type definition is not allowed", __LINE__);
+
+					//parse function paramter list
+					ParameterList *paramList = parseParamList();
+
+					declaredType = new ModifiedType(new FunctionType(declaredType, paramList));
+				}else if(currentToken == ':'){
+					//bit type
+					if(!att->allowBitType){
+						headerParser->reportError("bit type not allowed in this scope!", __LINE__);
+					}
+					const PrimType *primType = dynamic_cast<const PrimType*>(declaredType->getType());	
+					Keyword keyword;
+					if(primType != NULL)
+						keyword = primType->getKeyword();
+					if(keyword != Keyword::intKeyword() &&
+						keyword != Keyword::charKeyword())
+						headerParser->reportError("integeral type expected!", __LINE__);
+					BitsType *bitsType = new BitsType();
+					string str;
+					declaredType = new ModifiedType(bitsType);
+					bypassExpr(str);
+					bitsType->bitLen.swap(str);
+				}
+				if(declaration != NULL){
+					assert(innerNode == NULL && outterNode == NULL);
+					assert(declaration->getType() == NULL && declaredType != NULL);
+
+					const FunctionType *funcType = dynamic_cast<const FunctionType*>(declaredType->getUnModifiedType());
+					if(funcType != NULL)
+						declaration = new FunctionDeclaration(declaration->getName(), funcType);
+					else
+						declaration->setType(declaredType);
+				}else if(innerNode != NULL && outterNode != NULL){
+					if(innerNode == NULL || outterNode == NULL)
+						headerParser->reportError("syntax error", __LINE__);
+
+					//assert(innerNode != NULL && outterNode != NULL);
+					declaration = dynamic_cast<Declaration*>(outterNode);
+					if(declaration != NULL){
+						assert(innerNode == outterNode);
+						assert(declaration->getType() == NULL && declaredType != NULL);
+
+						const FunctionType *funcType = dynamic_cast<const FunctionType*>(declaredType->getUnModifiedType());
+						if(funcType != NULL)
+							declaration = new FunctionDeclaration(declaration->getName(), funcType);
+						else
+							declaration->setType(declaredType);
+					}else{
+						Type *tmpType = dynamic_cast<Type*>(outterNode);
+						if(tmpType == NULL || !setNodeType(tmpType, declaredType))
+							headerParser->reportError("syntax error", __LINE__);
+						
+						declaration = dynamic_cast<Declaration*>(innerNode);
+						if(declaration == NULL){
+							tmpType = dynamic_cast<Type*>(innerNode);
+							if(tmpType == NULL)
+								headerParser->reportError("syntax error", __LINE__);
+							declaredType = dynamic_cast<ModifiedType*>(tmpType);
+							if(declaredType == NULL)
+								declaredType = new ModifiedType(tmpType);
+						}else{
+							Type *tmpType = const_cast<Type*>(declaration->getType());
+							if(tmpType == NULL)
+								headerParser->reportError("syntax error", __LINE__);
+							declaredType = dynamic_cast<ModifiedType*>(tmpType);
+							if(declaredType == NULL)
+								declaredType = new ModifiedType(tmpType);
+						}
+					}
+				}
+				if(currentToken == '='){
+					//assignment
+					if(storage.isTypedef()){
+						//initialization is not allowed in "typedef" qualified declration.
+						//That is the following code is invalid:
+						//typedef int a = 324;
+						headerParser->reportError("initialization is not allowed in 'typedef' qualified declaration", __LINE__);
+					}
+					if(dynamic_cast<FunctionDeclaration*>(declaration)){
+						headerParser->reportError("initialization is not allowed for function declaration", __LINE__);
+					}
+					if(!att->allowInitialization){
+						//initialization not allowed in some scope
+						//That is the following code is invalid under C
+						//strut Test{
+						// int a = 1343;
+						//};
+						//void func(int, int b = 3);
+						headerParser->reportError("initialization is not allowed in this scope", __LINE__);
+					}
+					//Bypass the initialization expression.
+					currentToken = headerParser->getToken();
+					string str;
+					bypassExpr(str);
+				}
+
+				if(declaration != NULL){
+					if(headerParser->currentScope->findDeclare(declaration->getName(), 0) != NULL){
+						//This is differenct from C, in C, redeclaration of an identifier is allowed
+						//But redefinition is not allowed.
+						//Notice that definition is different from declaration in C.
+						//Definition will leads to momery allocation for variables or functions
+						//Declaration is only specifications of functions or variables
+						//But in my trival code, I treat them as the same.
+						headerParser->reportError("redeclaration of an identifier", __LINE__);
+					}
+					if(storage.isTypedef()){
+						Typedef *td = new Typedef();
+						td->getName().swap(declaration->getName());
+						td->setSrc(declaration->getType());
+						headerParser->currentScope->add(td);
+					}else{
+						declaration->setModifiers(storage);
+						headerParser->currentScope->add(declaration);
+					}
+				}
+			}
+			if(!att->allowFunctionDefine && dynamic_cast<const FunctionType*>(declaredType->getType()) != NULL){
+					headerParser->reportError("function declaration not allowed in this scope", __LINE__);
+			}
+			if(currentToken == att->declarationEndToken || (!att->needDeclarationeEndToken && currentToken == att->endToken)){
+				if(declaration == NULL){
+					if(storage.isStorageSet()){
+						headerParser->reportError("variable name expected", __LINE__);
+					}
+					headerParser->currentScope->add(declaredType);
+				}
+				break;
+			}
+			if(currentToken == att->varListSeparator){
+				if(!att->allowVarList){
+					// in function parameter list scope multiple definition of variables in one statement is not allowed.
+					//That is the following code is invalid:
+					//void func(int a, b,c);
+					//But the following code is valid
+					//int a, b, c;
+					//struct Test{
+					// int a, c;
+					//};
+					headerParser->reportError("multiple declarations is not allowed", __LINE__);
+				}
+				currentToken = headerParser->getToken();
+				if(currentToken == att->declarationEndToken){
+					headerParser->reportError("syntax error", __LINE__);
+				}
+				if(declaration == NULL){
+					headerParser->reportError("syntax error", __LINE__);
+				}
+				continue;
+			}
+			headerParser->reportError("syntax error", __LINE__);
+		}
+	}
+};
+int HeaderParser::parseDeclaration(){
+	DeclarationParser declarationParser(this, Lexer::IDENTIFIER);
+	return declarationParser.parse();
 }
 
 struct PreprocessingExpr{
@@ -1545,8 +1947,7 @@ int HeaderParser::preprocessInstruction(){
 		if(name == "undef"){
 			int token = lexer->getToken();
 			if(token != Lexer::IDENTIFIER){
-				reportError("undef expects an identifier");
-				exit(__LINE__);
+				reportError("undef expects an identifier", __LINE__);
 			}
 			const string& macroName = lexer->getTokenContent();
 			globalScope->removeMacro(macroName);
@@ -1567,8 +1968,7 @@ int HeaderParser::preprocessInstruction(){
 				lexer->skipToEndOfLine(expr.content);
 				if(!expr.evaluate())
 				{					
-					reportError("invalid expression found");
-					exit(__LINE__);
+					reportError("invalid expression found", __LINE__);
 				}
 				isBlockActive = (expr.value != 0);
 			}else{
@@ -1577,8 +1977,7 @@ int HeaderParser::preprocessInstruction(){
 				lexer->skipSpace();
 				lexer->skipToEndOfLine(tmp);
 				if(token != Lexer::IDENTIFIER){
-					reportError("invalid pre processing instruction found");
-					exit(__LINE__);
+					reportError("invalid pre processing instruction found", __LINE__);
 				}
 				if(!tmp.empty()){
 					Position pos = lexer->getPosition();
@@ -1667,18 +2066,18 @@ int HeaderParser::preprocessInstruction(){
 								lexer->getTokenContent() == "ifdef" ||
 								lexer->getTokenContent() == "ifndef")
 								++currentLevel;
-						}
-					}
+						}else
+							continue;
+					}else
+						continue;
 				}
 				token = lexer->getToken();
 			}
 			if(token == Lexer::END){
-				reportError("'endif' preprocessing insrtuction expected");
-				exit(__LINE__);
+				reportError("'endif' preprocessing insrtuction expected", __LINE__);
 			}
 		}else{
-			reportError("unregonized preprocessing instruction ");
-			exit(__LINE__);
+			reportError("unregonized preprocessing instruction ", __LINE__);
 		}
 		return lexer->getToken();
 	}
@@ -1702,7 +2101,7 @@ bool HeaderParser::parse(){
 			case Lexer::IDENTIFIER:{		
 					token = parseDeclaration();
 					if(token != ';')
-						reportError("';' expected");
+						reportError("';' expected", __LINE__);
 					break;
 			}
 			case ';':break;//empty statement
@@ -1711,8 +2110,7 @@ bool HeaderParser::parse(){
 			case Lexer:: NUMBER:
 			case Lexer::OPERATOR:
 			default:
-				reportError("constant not allowed here ");
-				exit(__LINE__);
+				reportError("constant not allowed here ", __LINE__);
 			}
 		token = getToken();
 	}
@@ -1983,7 +2381,7 @@ Expr *ExprParser::parse(){
 
 bool MacroExpansion::getToken(){
 	//Note: since macro parameters maybe replaced by its value, 
-	//when this function returns and identifier token, it may not be an
+	//when this function returns an identifier, it may not be an
 	//identifier. But for macro expansion
 	//and the algorithm here it's ok to take it as an identifier
 
@@ -2085,9 +2483,6 @@ Begin:
 }
 
 void Lexer::toString(int token, std::string& str){
-	
-			/* COMMENT = 50000,
-		  = 20002, STRING = 2000*/
 	switch(token){
 	case Lexer::COMMENT:
 	case Lexer::END:
@@ -2166,10 +2561,45 @@ bool MacroExpansion::expandMacro(std::string& result){
 
 /***************************************************************************/
 
-int _tmain(int argc, _TCHAR* argv[])
+std::pair<std::string, std::string> generateOutputFunctionForStruct(Scope* scope){
+  std::string definitions;
+  std::string declarations;
+  for (auto node : scope->childNodes()){
+    NamedCompoundType *type = dynamic_cast<NamedCompoundType*>(node);
+    if (nullptr != type){
+      std::string oneDef = "std::ostream& operator<<(std::ostream& os, const " + type->getName() + "& field)";
+      declarations += oneDef;
+      oneDef += "{\n";
+      declarations += ";\n";
+      auto defScope = type->getScope();
+      auto chilren = defScope->childNodes();
+      bool isFirstDeclaration = true;
+      for (size_t i = 0; i < chilren.size(); ++i){
+        Declaration* declaration = dynamic_cast<Declaration*>(chilren[i]);
+        if (nullptr != declaration){
+          Comment* comment = (i == 0 ? nullptr : dynamic_cast<Comment*>(chilren[i - 1]));
+          if (nullptr == comment){
+            std::cout << "No comment found for " <<type->getName() << "::" << declaration->getName() << std::endl;
+          }
+          if (isFirstDeclaration) oneDef += "  os << \"";
+          else oneDef += "\n     << \"\\n";
+          oneDef += (nullptr == comment ? declaration->getName() : comment->getContent());
+          oneDef += " : \" << field.";
+          oneDef += declaration->getName();
+          isFirstDeclaration = false;
+        }
+      }
+      oneDef += ";\n  return os;\n}\n";
+      definitions += oneDef;
+    }
+  }
+  return{ declarations, definitions };
+}
+int main(int argc, char* argv[])
 {
+
 	string str;
-	bool tmp = Utility::fileToString("d:\\jpeglib.h", str);
+	bool tmp = Utility::fileToString("D:\\ThostFtdcUserApiStruct.h", str);
 	assert(tmp);
 	const char *start =str.c_str();
 	int count = str.size();
@@ -2178,7 +2608,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	Position pos = lexer.getPosition();
 	int token = lexer.getToken();
 	while(token != Lexer::END){
-		if(token == Lexer::COMMENT){			
+		if(token == Lexer::COMMENT){
 			cout << pos.row << ',' << pos.col << ':' << lexer.getTokenContent() << endl;
 		}
 		pos = lexer.getPosition();
@@ -2192,7 +2622,16 @@ int _tmain(int argc, _TCHAR* argv[])
 	Expr *expr = parser.parse();
 	ExprToString toString;
 	toString.visit(expr);
-	cout << toString.getString() << endl;
+	//cout << toString.getString() << endl;
+	//string result;
+	//headerParser.getGlobalScope()->toString(result);
+  auto ret = generateOutputFunctionForStruct(headerParser.getGlobalScope());
+  std::cout << "DECLARATIONS: \n";
+  std::cout << ret.first << std::endl;
+  std::cout << "DEFINITIONS: \n";
+  std::cout << ret.second << std::endl;
+	cout << endl << endl;
+	//cout << result << endl;
 	cin.get();
 	return 0;
 }

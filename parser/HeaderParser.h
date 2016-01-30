@@ -6,7 +6,7 @@
 #include <functional>
 #include <streambuf>
 #include <fstream>
-#include <sstream>s
+#include <sstream>
 #include <list>
 #include <iostream>
 namespace sli{
@@ -145,6 +145,9 @@ namespace sli{
 		bool operator ==(Keyword w) const{
 			return index == w.index;
 		}
+		bool operator !=(Keyword w) const{
+			return index != w.index;
+		}
 		static Keyword autoKeyword(){return Keyword(AUTO);}
 		static Keyword externKeyword(){return Keyword(EXTERN);}
 		static Keyword registerKeyword(){return Keyword(REGISTER);}
@@ -244,7 +247,7 @@ namespace sli{
 		bool check(Modifier modifier);
 		bool check(Modifiers modifiers);
 		bool check(const Type *type);
-		void toString(std::string& str);
+		void toString(std::string& str) const;
 	};
 	/****************************************/
 	class Node{
@@ -255,28 +258,6 @@ namespace sli{
 
 	/****************************************/
 	class Type : public Node{
-	};
-	/****************************************/
-	
-	class Scope : public Node{
-	public:
-		class ScopeAttribute;
-		Scope(Scope *parent = NULL, ScopeAttribute *att = NULL) : parent(parent), att(att){}
-		virtual Type *findType(const std::string& name) = 0;
-		virtual Node *findDeclare(const std::string& name) = 0;
-		const ScopeAttribute *getAttribute() const {
-			return att;
-		}
-		virtual bool add(Node *node) = 0;
-		virtual void toString(std::string& str) const{
-		}
-		Scope *getParent(){
-			return parent;
-		}
-	protected:
-		Scope *parent;
-		ScopeAttribute *att;
-		std::vector<Node*> nodes;
 	};
 	/****************************************/
 	class ModifiedType : public Type{
@@ -312,23 +293,28 @@ namespace sli{
 		Modifiers getModifiers() const{
 			return modifiers;
 		}
-		virtual void toString(std::string& str) const{
-		}
+		virtual void toString(std::string& str) const;
 	};
 	/****************************************/
 	class Declaration : public Node{
 	protected:
 		Modifiers modifiers;
 		std::string name;
-		Type *type;
+		const Type *type;
 	public:
 		Declaration(const std::string& name, 
-			Type *type) : name(name), type(type){
+			const Type *type) : name(name), type(type){
+		}
+		std::string& getName(){
+			return name;
 		}
 		const std::string& getName() const{
 			return name;
 		}
-		Type *getType() const{
+		void setModifiers(Modifiers modifiers){
+			this->modifiers = modifiers;
+		}
+		const Type *getType() const{
 			return type;
 		}
 		void setType(Type *type){
@@ -374,6 +360,9 @@ namespace sli{
 		bool equals(const PrimType *type) const{
 			return keyword == type->keyword;
 		}
+		Keyword getKeyword() const{
+			return keyword;
+		}
 		virtual void toString(std::string& str)const;
 		static const PrimType *get(Keyword keyword){
 			if(keyword == intType()->keyword)
@@ -412,8 +401,8 @@ namespace sli{
 	};
 	/****************************************/
 	class ArrayType : public PointerType{
-		std::string arraySize;
 	public:
+		std::string arraySize;
 		ArrayType(const Type *srcType) : PointerType(srcType){
 		}
 		virtual void toString(std::string& str)const;
@@ -423,10 +412,14 @@ namespace sli{
 		std::string name;
 		const Type *srcType;
 	public:
+		Typedef() : srcType(NULL){}
 		Typedef(const std::string& name, Type *srcType)
 			: srcType(srcType), name(name){}
 		const Type *getSrc() const{
 			return srcType;
+		}
+		void setSrc(const Type *type){
+			this->srcType = type;
 		}
 		std::string& getName(){
 			return name;
@@ -440,9 +433,36 @@ namespace sli{
 				return srcType;
 			return tmp->getBaseType();
 		}
+		void getDefinition(std::string& str) const;
 		virtual void toString(std::string& str)const;
 	};
+	/****************************************/
 	
+	class Scope : public Node{
+	public:
+		class ScopeAttribute;
+		Scope(Scope *parent = NULL, ScopeAttribute *att = NULL) : parent(parent), att(att){}
+		virtual Type *findType(const std::string& name, unsigned int level);
+		virtual Node *findDeclare(const std::string& name, unsigned int level);
+		const ScopeAttribute *getAttribute() const {
+			return att;
+		}
+		virtual bool add(Node *node){
+			nodes.push_back(node);
+			return true;
+		}
+		virtual void toString(std::string& str) const;
+		Scope *getParent(){
+			return parent;
+		}
+    const std::vector<Node*>& childNodes() const{
+      return nodes;
+    }
+	protected:
+		Scope *parent;
+		ScopeAttribute *att;
+		std::vector<Node*> nodes;
+	};
 	/****************************************/
 	class FunctionType;
 	class ParameterList : public Scope{
@@ -453,16 +473,6 @@ namespace sli{
 		const std::vector<Node*>& getParams(){
 			return nodes;
 		}
-		virtual Type *findType(const std::string& name){
-			return NULL;
-		}
-		virtual Node *findDeclare(const std::string& name){
-			return NULL;
-		}
-		virtual bool add(Node *node){
-			return false;
-		}
-		virtual void toString(std::string& str)const;
 	};
 	/****************************************/
 	class FunctionType : public Type{
@@ -471,6 +481,9 @@ namespace sli{
 	public:
 		FunctionType(Type *retType, ParameterList* params)
 			: retType(retType), params(params){
+		}
+		void setRetType(Type *type){
+			retType = type;
 		}
 		Type *getRetType(){
 			return retType;
@@ -486,7 +499,7 @@ namespace sli{
 		bool isInitialized;
 	public:
 		VariableDeclaration(const std::string& name, 
-			Type *type) : Declaration(name, type){
+			Type *type) : Declaration(name, type), isInitialized(false){
 		}
 	};
 
@@ -494,18 +507,17 @@ namespace sli{
 	class FunctionDeclaration : public Declaration{
 	public:
 		FunctionDeclaration(const std::string& name, 
-			FunctionType *type) : Declaration(name, type){
+			const FunctionType *type) : Declaration(name, type){
 		}
 	};
 	/****************************************/	
 	class GlobalScope : public Scope{
 		std::map<std::string, int> macros;
 		std::map<std::string, int> declares;
-		std::map<std::string, int> metaTypes;
 	public:
 		GlobalScope(Scope *parent, ScopeAttribute *att) : Scope(parent, att){}
-		virtual Type *findType(const std::string& name);
-		virtual Node *findDeclare(const std::string& name);
+		virtual Type *findType(const std::string& name, unsigned int level);
+		virtual Node *findDeclare(const std::string& name, unsigned int level);
 		Macro *findMacro(const std::string& macro);
 		std::pair<Macro*,int> findMacroIndex(const std::string& macro);
 		bool removeMacro(const std::string& macro);
@@ -514,23 +526,49 @@ namespace sli{
 	};
 	/****************************************/
 	class CompoundTypeScope : public Scope{
+		std::map<std::string, int> declares;
+	public:
+		CompoundTypeScope(Scope *parent, ScopeAttribute *att) : Scope(parent, att){}
+		bool add(Node *node);
+		virtual Type *findType(const std::string& name, unsigned int level);
+		virtual Node *findDeclare(const std::string& name, unsigned int level);
 	};
 	/****************************************/
 	class CompoundType : public Type{
+	protected:
 		CompoundTypeScope *scope;
 	public:
 		CompoundType() : scope(NULL){}
-		bool isDefined(){
+		void setScope(CompoundTypeScope *scope){
+			this->scope = scope;
+		}
+		virtual bool isDefined(){
 			return scope != NULL;
 		}
-	};
+    CompoundTypeScope* getScope(){
+      return scope;
+    }
+ 	};
 	class BitsType : public Type{
-		int bitLen;
 	public:
+		std::string bitLen;
+		virtual void toString(std::string& str)const;
+	};
+	class EnumType : public CompoundType{
+	public:
+		EnumType(){}
+		EnumType(const std::string& name) : name(name){}
+		std::string name;
+		std::string definition;
+		virtual bool isDefined(){
+			return !definition.empty();
+		}
+		void getDefinition(std::string& str) const;
+		virtual void toString(std::string& str)const;
 	};
 	class AnonymousCompoundType : public CompoundType{
 	public:
-		virtual void toString(std::string& str);
+		virtual void toString(std::string& str)const;
 	};
 	class NamedCompoundType : public CompoundType{
 		std::string name;
@@ -540,7 +578,8 @@ namespace sli{
 		const std::string& getName(){
 			return name;
 		}
-		virtual void toString(std::string& str);
+		void getDefinition(std::string& str) const;
+		virtual void toString(std::string& str)const;
 	};
 
 	/****************************************/
@@ -575,7 +614,8 @@ namespace sli{
 		Block(const Byte *start, const Byte *end, int flag = 0,
 			Block *next = NULL, Block *prev = NULL) : 
 		start(start), end(end), next(next), prev(prev), flag(flag){
-			assert(start < end);
+			if(start >= end)
+				assert(start < end);
 		}
 		void insert(Block *block){
 			block->next = next;
@@ -701,6 +741,10 @@ namespace sli{
 			}
 			current = block->start;
 			this->block = block;
+			if(this->block->isResetPos()){
+				Position tmp = pos;
+				this->pos = block->getStartPosition();							
+			}
 		}
 		BlockIterator operator++(int){
 			BlockIterator tmp(*this);
@@ -752,8 +796,8 @@ namespace sli{
 			}
 			return ch;
 		}
-		static Type *getType(Node *node){
-			Type *type = dynamic_cast<Type*>(node);
+		static const Type *getType(Node *node){
+			const Type *type = dynamic_cast<Type*>(node);
 			if(type == NULL){
 				Declaration * declare = dynamic_cast<Declaration *>(node);
 				if(declare != NULL)
@@ -851,19 +895,72 @@ namespace sli{
 		HeaderParser& operator=(const HeaderParser&);
 		HeaderParser(const HeaderParser&);
 		bool expandMacro(Macro *macro);
+		class DeclarationParser;
+		friend class DeclarationParser;
 		int getToken();
 		int getToken(int token);
 		int preprocessInstruction();
-		int parseDeclares(Node *&innterMost, Node *&outterMost);
-		int parsePostDeclarator(int token, ModifiedType *&type);
-		int parseDeclaration();		
-		int parseDefinition(Type **type);
-		int parseVariableList(int token, ModifiedType *type);
+        /*
+            <End> : 
+                "0" : DeclarationEndToken | ScopeEndToken | ; | EndToken
+            <Seperator> :
+                ,
+            <Declaration>:
+                "1" : <Type> <End>
+                "2" : <Type> <Declarator> <End>
+                "3" : <Type> <Declarator> (<Seperator> <Declarator>)* <End>
+				"9" : <Type> VarName Colon Expr <End>
+            <Type>:
+                "4" : Modifier* <TypeDefinition> Modifier*
+            <CompoundTypeDefinition> : 
+                "5" : CompoundTypeMetaType CompoundTypeName? CurlyBracket <Declaration>* CurlyBracket
+            <TypeDefition>:
+                "6" : PrimaryType | CompoundTypeMetaType? CompoundTypeName | TypedefName |  <CompoundTypeDefinition> | Empty
+
+            <Declarator> :
+                "7" : ( Pointer Modifier*)* ( Bracket <Declarator> Bracket | VarName)? (<PostDeclarator>)? (Assignment Initializer)?
+            <PostDeclarator> : 
+                "8" : (SquareBracket [Expression] SquareBracket)* | (Bracket <Declaration>* Bracket)
+
+
+            Notes:
+                This does not handle "enum" declaration very well.
+                As of "3", every <Declarator> must produce a Variable or Function Declration.
+                For a variable that is qualified by "typedef", "Initializer" is not allowed.
+				If "TypeDefinition" is "Empty", then the type should be deduced from modifiers.
+				"<CompoundTypeDefinition>" is not allowed as function return type.
+
+                In global scope:
+                    if "1" occurs, for type that is not a CompoundType, this type declaration will be ignored.
+                        For CompoundType, if there is no definition, this will be taken as a forward declaration.
+                    if "2" occurs, and there is no variable or functions being defined, this declaration will be ignored.
+                In function parameter list scope:
+                    "3" is not allowed.
+                    "5" is not allowed.
+					function's not allowed to be declared in this scope
+                    Storage qualifier is not allowed.
+                    if "7" occurs, then "Initalizer" is not allowed(In C++ this is allowed).
+                In compound definition scope:
+                    Storage modifier is not allowed("static" modifier is allowed in C++).
+                    if "7" occurs, "Initializer" is not allowed.
+					function's not allowed to be declared in this scope
+					if "1" occurs and if it's not a compound type definition, then a varialbe must be defined.
+					forward declaration is not allowed in this scope.
+            
+        */
+		int parseDeclaration();	
 		int parseMacro();
-		int skipBraces(char ch);
+		int skipBraces(char ch){
+			std::string str;
+			return skipBraces(ch, &str);
+		}
+		int skipBraces(char ch, std::string* str);
 		void includeFile(const char *fileName);
 		void reportError(const char *msg, int exitCode = 0);
 	public:
+		GlobalScope* getGlobalScope(){
+			return globalScope;
+		}
 		HeaderParser(const Byte *start, const Byte *end);
 		bool parse();
 		~HeaderParser(){
@@ -1191,10 +1288,9 @@ namespace sli{
 	  primary :
 			NUMBER
 			IDDENTIFIER
-			UNARYOP(+,-,~!)	primary
+			UNARYOP(+,-,~,!)	primary
 			(expression)
-			IDDENTIFIER(expression,expression,...)		Note: this resembles function invokation that only take one parmeter
-			(TYPENAME)primary		Note: This is not supported
+			IDDENTIFIER(expression,expression,...)		Note: this resembles function invokation
 	  bitwise :
 			bitwise OPERATOR(&,|,^) primary
 			primary
@@ -1204,13 +1300,13 @@ namespace sli{
 	  shift :
 			shift OPERATOR(<<,>>) arithmetical
 			arithmetical
-	  comparision :
-			comparision OPERATOR(>,<,>=,<=,==,!=) shift
+	  comparison :
+			comparison OPERATOR(>,<,>=,<=,==,!=) shift
 			shift
 	  logical :
 			logical OPERATOR(&&,||) comparison
 			comparison ? logical : logical
-			comparision
+			comparison
 	  expression :
 			logical
 
