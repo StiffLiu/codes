@@ -399,7 +399,7 @@ nsr = function(theta0, theta1, theta2, theta3, tm, price, par){
 
 # log likelihood for i.i.d gauss distribution
 logLikGauss = function(vals){
-  -length(vals) *(log(sd(vals) * sqrt(2*pi)) + 0.5)
+  -length(vals) * 0.5 * (log(sum(vals^2)) + log(2*pi) + 1)
 }
 
 # Nelson-Siegel model log likelihood assuming residuals are i.i.d gauss variables
