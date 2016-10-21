@@ -250,3 +250,60 @@ cor(fit2$resid)
 cor.test(fit2$resid[, 1], fit2$residuals[, 2])
 cor.test(fit2$resid[, 1], fit2$residuals[, 3])
 cor.test(fit2$resid[, 2], fit2$residuals[, 3])
+
+# AIC does not support multiple response.
+logLikGauss = function(vals){
+  -length(vals) * 0.5 * (log(sum(vals^2)) + log(2*pi) + 1 - log(length(vals)))
+}
+myAIC = function(fit, method="aic"){
+  coeficients = coef(fit)
+  residual = residuals(fit)
+  name = colnames(coeficients)
+  aics = matrix(nrow=1, ncol=length(name), dimnames=list("1", name))
+  if(method != "aic" & method != "bic") stop("only aic and bic are supported")
+  isAIC = (method == "aic")
+  for(i in 1:length(name)){
+    p = length(coeficients[, name[i]])
+    aics[1,i] = -2 * logLikGauss(residual[, i]) + (if(isAIC) 2 else log(length(residual[, i]))) * (p + 1)
+  }
+  if(isAIC) list(aic=aics) else list(bic=aics)
+}
+myAIC(fit1)
+myAIC(fit2)
+myAIC(fit1, "bic")
+myAIC(fit2,"bic")
+
+estVarByFactor = function(betas, factors, varResid){
+  betas %*% cov(factors) %*% t(betas) +varResid
+}
+
+factorNames = c("Mkt.RF", "SMB", "HML")
+stock1Beta = matrix(c(0.5, 0.4, -0.1), nrow=1, dimnames=list("1", factorNames))
+stock1VarResid = 23
+stock2Beta = matrix(c(0.6, 0.15, 0.7), nrow=1, dimnames=list("1", factorNames))
+stock2VarResid = 37
+
+factors = ffData[, factorNames]
+estVarByFactor(stock1Beta, factors, stock1VarResid)
+estVarByFactor(stock2Beta, factors, stock2VarResid)
+# covriance between stock1 and stock2
+stock1Beta %*% cov(factors) %*% t(stock2Beta)
+
+stocks = read.csv("F:\\R\\SaDAfFE\\data\\Stock_FX_Bond.csv")
+stocksAC = c("GM_AC", "F_AC", "UTX_AC", "CAT_AC", "MRK_AC", "PFE_AC", "IBM_AC", "MSFT_AC")
+stocks = stocks[, stocksAC]
+stocksLogReturn = apply(apply(stocks, 2, log), 2, diff)
+factorAnalysis = factanal(stocksLogReturn, factors=2, rotation="none")
+loads = matrix(as.numeric(loadings(factorAnalysis)), ncol=2)
+rownames(loads) = stocksAC
+(loads %*% t(loads))['F_AC', 'IBM_AC']
+cor(stocksReturn[, 'F_AC'], stocksReturn[, 'IBM_AC'])
+
+yields2009 = read.csv("F:\\R\\SaDAfFE\\data\\yields2009.csv",header=T)
+pca = prcomp(yields2009[, -1])
+
+data(midcapD.ts, package='fEcofin')
+fact = factanal(midcapD.ts[,-1], factors=9)
+summary(fact)
+loadings(fact) %*% t(loadings(fact))
+loadings(fact) %*% t(loadings(fact)) - cor(midcapD.ts[,-1])
